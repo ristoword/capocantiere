@@ -186,6 +186,7 @@ export async function callChat(
   const url = direct ? `${base}/chat/completions` : '/api/ai/chat'
   const headers: Record<string, string> = { 'Content-Type': 'application/json' }
   if (direct) headers.Authorization = `Bearer ${key}`
+  else headers['X-Requested-With'] = 'capocantiere' // richiesto dal nostro server (anti-CSRF)
   const body: Record<string, unknown> = { temperature: options.temperature ?? 0.2, messages }
   if (direct) body.model = settings.model.trim() || 'gpt-4o-mini'
   if (options.json) body.response_format = { type: 'json_object' }

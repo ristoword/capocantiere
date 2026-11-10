@@ -35,7 +35,10 @@ export async function generateImage(settings: Settings, prompt: string): Promise
   try {
     response = await fetch(direct ? `${base}/images/generations` : '/api/ai/image', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...(direct ? { Authorization: `Bearer ${key}` } : {}) },
+      headers: {
+        'Content-Type': 'application/json',
+        ...(direct ? { Authorization: `Bearer ${key}` } : { 'X-Requested-With': 'capocantiere' }),
+      },
       body: JSON.stringify(
         direct ? { model: 'gpt-image-1-mini', prompt, size: '1024x1024', quality: 'low', n: 1 } : { prompt },
       ),

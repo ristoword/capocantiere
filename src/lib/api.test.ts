@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Settings } from '../domain/types'
 import { computeJob } from '../engine/compute'
-import { diagnoseJob, parseDiagnosis, verifyPhase } from './api'
+import { callChat, diagnoseJob, parseDiagnosis, verifyPhase } from './api'
 import { interpretSettings, maskKey } from '../storage/settings'
 
 const env: Settings = {
@@ -101,6 +101,20 @@ describe('client del modello', () => {
     expect(reading.photosSent).toBe(true)
     expect(reading.difficulty).toBe('media')
     expect(sample.materials.find((line) => line.id === 'mat:pittura:idropittura')?.quantity).toBeCloseTo(24, 5)
+  })
+
+  it('verso il nostro server invia l’intestazione anti-CSRF e non la chiave', async () => {
+    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+      const headers = (init?.headers ?? {}) as Record<string, string>
+      expect(url).toBe('/api/ai/chat')
+      expect(headers['X-Requested-With']).toBe('capocantiere')
+      expect(headers.Authorization).toBeUndefined()
+      return jsonResponse({ choices: [{ message: { content: 'ok' } }] })
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    const answer = await callChat({ apiKey: '', baseUrl: '', model: '' }, [{ role: 'user', content: 'ciao' }], { json: false })
+    expect(answer).toBe('ok')
+    expect(fetchMock).toHaveBeenCalledOnce()
   })
 
   it('se il JSON non è valido non inventa una diagnosi', async () => {
