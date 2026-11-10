@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState } 
 import type { Project, StoredPhoto } from '../domain/types'
 import { deleteProjectCascade, listPhotos, listProjects, putPhoto, putProject } from '../storage/db'
 import { listPhotos as localPhotos, listProjects as localProjects } from '../storage/localdb'
+import { shrink } from '../lib/image'
 import { useAuth } from './Auth'
 
 /** Porta sul server i lavori salvati finora solo in questo browser (una volta per account). */
@@ -82,7 +83,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   }, [])
 
   const addPhoto = useCallback(async (photo: StoredPhoto) => {
-    await putPhoto(photo)
+    // Le foto del telefono pesano 4-12 MB: si salvano ridotte (1600 px, JPEG) per non riempire lo spazio.
+    await putPhoto({ ...photo, blob: await shrink(photo.blob) })
   }, [])
 
   const photosFor = useCallback((projectId: string) => listPhotos(projectId), [])
