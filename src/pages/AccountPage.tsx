@@ -88,6 +88,7 @@ export function AccountPage() {
   }
 
   async function restoreBackup(file: File) {
+    if (!window.confirm('Ripristinare il backup? I lavori con lo stesso identificativo, il listino e i dati attività verranno sostituiti con quelli del file.')) return
     try {
       const parsed: unknown = JSON.parse(await file.text())
       const result = await api<{ projects: number; photos: number }>('/api/data/import', { method: 'POST', body: parsed })
@@ -100,10 +101,11 @@ export function AccountPage() {
 
   async function changePassword(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    const data = new FormData(event.currentTarget)
+    const form = event.currentTarget // dopo un await currentTarget non è più disponibile
+    const data = new FormData(form)
     try {
       await api('/api/account/password', { method: 'POST', body: { current: data.get('current'), next: data.get('next') } })
-      event.currentTarget.reset()
+      form.reset()
       say(true, '✅ Password cambiata.')
     } catch (reason) {
       fail(reason)
@@ -115,6 +117,13 @@ export function AccountPage() {
     if (!password) return
     try {
       await api('/api/account/delete', { method: 'POST', body: { password } })
+      // Via ogni copia locale di questo account (cache, coda, foto in attesa, vecchio archivio del browser).
+      try {
+        for (const key of Object.keys(localStorage)) if (key.startsWith('capocantiere-')) localStorage.removeItem(key)
+        indexedDB.deleteDatabase('capocantiere')
+      } catch {
+        /* archivio non disponibile */
+      }
       window.location.assign('/')
     } catch (reason) {
       fail(reason)

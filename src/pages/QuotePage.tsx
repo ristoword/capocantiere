@@ -54,6 +54,7 @@ export function QuotePage() {
   const message = quoteMessage(current, business)
 
   async function save() {
+    if (!Number.isFinite(meta?.vatPercent)) throw new Error('IVA non valida')
     await saveProject({ ...current, updatedAt: new Date().toISOString() })
     setNote('✅ Dati del preventivo salvati.')
   }
@@ -68,7 +69,9 @@ export function QuotePage() {
           type="button"
           className="btn solid"
           onClick={() => {
-            void save().then(() => window.print())
+            void save()
+              .then(() => window.print())
+              .catch((reason: unknown) => setNote(`⚠️ Salvataggio non riuscito: ${reason instanceof Error ? reason.message : 'riprova'}`))
           }}
         >
           🖨 Stampa o salva PDF
@@ -85,7 +88,7 @@ export function QuotePage() {
         <button type="button" className="btn" onClick={async () => setNote((await copyText(message)) ? '✅ Testo copiato.' : 'Copia non riuscita.')}>
           📋 Copia testo
         </button>
-        <button type="button" className="btn" onClick={() => void save()}>
+        <button type="button" className="btn" onClick={() => void save().catch((reason: unknown) => setNote(`⚠️ Salvataggio non riuscito: ${reason instanceof Error ? reason.message : 'riprova'}`))}>
           💾 Salva
         </button>
       </div>
@@ -121,11 +124,11 @@ export function QuotePage() {
           </label>
           <label className="field">
             <span className="field-label">IVA %</span>
-            <input type="number" min={0} max={30} value={meta.vatPercent} onChange={(e) => setMeta({ ...meta, vatPercent: Number(e.target.value) })} />
+            <input type="number" min={0} max={30} value={meta.vatPercent} onChange={(e) => setMeta({ ...meta, vatPercent: Number.isFinite(Number(e.target.value)) ? Number(e.target.value) : 0 })} />
           </label>
           <label className="field">
             <span className="field-label">Validità (giorni)</span>
-            <input type="number" min={1} max={365} value={meta.validDays} onChange={(e) => setMeta({ ...meta, validDays: Number(e.target.value) })} />
+            <input type="number" min={1} max={365} value={meta.validDays} onChange={(e) => setMeta({ ...meta, validDays: Number.isFinite(Number(e.target.value)) && Number(e.target.value) > 0 ? Number(e.target.value) : 30 })} />
           </label>
         </div>
         <label className="field">

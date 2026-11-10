@@ -1,7 +1,7 @@
 import { searchVideos } from './youtube.mjs'
 
 // Proxy AI locale: la chiave resta sul server (variabile OPENAI_API_KEY), mai nel bundle del browser.
-const MAX_BODY = 25 * 1024 * 1024
+const MAX_BODY = 8 * 1024 * 1024 // chat con al più qualche foto già ridotta
 const ALLOWED = ['messages', 'temperature', 'response_format', 'max_tokens']
 
 function send(res, status, body) {
@@ -26,6 +26,12 @@ function readBody(req) {
     req.on('end', () => resolve(Buffer.concat(chunks).toString('utf8')))
     req.on('error', reject)
   })
+}
+
+// Se OpenAI rifiuta la chiave del server non va inoltrato un 401 (il browser lo scambierebbe per sessione scaduta).
+function upstreamAuthError(res, status) {
+  console.error(`OpenAI ha rifiutato la chiave del server (stato ${status}): controlla OPENAI_API_KEY.`)
+  return send(res, 502, { error: { message: 'Il servizio AI non è configurato correttamente. Avvisa l’amministratore.' } })
 }
 
 export function createAiMiddleware(env, hooks = {}) {
@@ -54,10 +60,12 @@ export function createAiMiddleware(env, hooks = {}) {
         const prompt = String(incoming.prompt || '').slice(0, 1500)
         if (!prompt.trim()) return send(res, 400, { error: { message: 'Descrizione immagine mancante' } })
         const upstream = await fetch(`${base}/images/generations`, {
+          signal: AbortSignal.timeout(90_000),
           method: 'POST',
           headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
           body: JSON.stringify({ model: imageModel, prompt, size: '1024x1024', quality: 'low', n: 1 }),
         })
+        if (upstream.status === 401 || upstream.status === 403) return upstreamAuthError(res, upstream.status)
         const text = await upstream.text()
         if (upstream.ok) hooks.onUsage?.(req, { kind: 'image', model: imageModel, tokensIn: 0, tokensOut: 0 })
         res.statusCode = upstream.status
@@ -78,14 +86,19 @@ export function createAiMiddleware(env, hooks = {}) {
       const incoming = JSON.parse(await readBody(req))
       const payload = { model }
       for (const name of ALLOWED) if (incoming[name] !== undefined) payload[name] = incoming[name]
+      // Tetti di costo: nessuna richiesta può chiedere risposte enormi.
+      payload.max_tokens = Math.min(Math.max(Number(payload.max_tokens) || 1200, 1), 2500)
+      if (payload.temperature !== undefined) payload.temperature = Math.min(Math.max(Number(payload.temperature) || 0, 0), 1.2)
       if (!Array.isArray(payload.messages)) {
         return send(res, 400, { error: { message: 'Richiesta senza messaggi' } })
       }
       const upstream = await fetch(`${base}/chat/completions`, {
+        signal: AbortSignal.timeout(90_000),
         method: 'POST',
         headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       })
+      if (upstream.status === 401 || upstream.status === 403) return upstreamAuthError(res, upstream.status)
       const text = await upstream.text()
       if (upstream.ok) {
         try {

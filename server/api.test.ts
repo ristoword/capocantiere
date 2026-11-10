@@ -112,10 +112,14 @@ describe('utente, dati e limiti', () => {
     expect(third.status).toBe(429)
   })
   it('cambia password ed elimina l’account con tutti i dati', async () => {
-    expect((await call('POST', '/api/account/password', { current: 'x', next: 'nuovapassword1' }, cookie)).status).toBe(401)
+    expect((await call('POST', '/api/account/password', { current: 'x', next: 'nuovapassword1' }, cookie)).status).toBe(403)
     const changed = await call('POST', '/api/account/password', { current: 'password123', next: 'nuovapassword1' }, cookie)
     expect(changed.status).toBe(200)
     cookie = changed.cookie
+    // L'unico amministratore non può sparire finché esistono altri utenti.
+    expect((await call('POST', '/api/account/delete', { password: 'nuovapassword1' }, cookie)).status).toBe(409)
+    const other = await call('POST', '/api/auth/login', { email: 'altro@test.it', password: 'password123' })
+    expect((await call('POST', '/api/account/delete', { password: 'password123' }, other.cookie)).status).toBe(200)
     expect((await call('POST', '/api/account/delete', { password: 'nuovapassword1' }, cookie)).status).toBe(200)
     expect((await call('GET', '/api/data/projects', undefined, cookie)).status).toBe(401)
     expect((await call('POST', '/api/auth/login', { email: 'mario@test.it', password: 'nuovapassword1' })).status).toBe(401)

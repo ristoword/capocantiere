@@ -3,7 +3,8 @@ import type { VideoHit } from '../../domain/types'
 import { findVideos } from '../../lib/videos'
 
 /** Elenco di video con riproduzione dentro l'app (youtube-nocookie) e link per aprirli su YouTube. */
-export function VideoList({ videos, query }: { videos: VideoHit[]; query: string }) {
+export function VideoList({ videos: all, query }: { videos: VideoHit[]; query: string }) {
+  const videos = all.filter((video) => /^[A-Za-z0-9_-]{11}$/.test(video.id)) // mai costruire un indirizzo da un id non valido
   const [playing, setPlaying] = useState<string | null>(videos.length === 1 ? videos[0].id : null)
   if (videos.length === 0) {
     return (

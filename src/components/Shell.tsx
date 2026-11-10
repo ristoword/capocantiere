@@ -24,7 +24,7 @@ const LINKS = [
 ]
 
 export function Shell() {
-  const { error, pending, online } = useStore()
+  const { error, pending, online, problem, dismissProblem } = useStore()
   const { user } = useAuth()
   const { pathname } = useLocation()
   useEffect(() => {
@@ -69,6 +69,14 @@ export function Shell() {
           <p className="banner warn no-print" role="status">
             {!online ? '📴 Sei offline: puoi continuare a lavorare, le modifiche si inviano da sole quando torna la rete.' : '🔄 Sincronizzo le modifiche fatte offline…'}
             {pending > 0 ? ` (${pending} in attesa)` : ''}
+          </p>
+        ) : null}
+        {problem ? (
+          <p className="banner err no-print" role="alert">
+            {problem}{' '}
+            <button type="button" className="btn sm" onClick={dismissProblem}>
+              Ho capito
+            </button>
           </p>
         ) : null}
         {error ? <p className="banner err no-print">{error}</p> : null}

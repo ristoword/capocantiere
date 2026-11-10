@@ -28,6 +28,7 @@ function extractInitialData(html) {
 
 async function viaScrape(query) {
   const response = await fetch(`https://www.youtube.com/results?search_query=${encodeURIComponent(query)}&hl=it&gl=IT`, {
+    signal: AbortSignal.timeout(10_000),
     headers: {
       'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36',
       'Accept-Language': 'it-IT,it;q=0.9',
@@ -44,6 +45,7 @@ async function viaScrape(query) {
   for (const item of raw) {
     if (seen.has(item.videoId)) continue
     seen.add(item.videoId)
+    if (!/^[A-Za-z0-9_-]{11}$/.test(String(item.videoId))) continue // solo identificativi YouTube validi
     const duration = item.lengthText?.simpleText || ''
     if (!duration) continue // dirette e anteprime senza durata
     videos.push({
@@ -71,15 +73,15 @@ async function viaApi(query, key) {
     q: query,
     key,
   }).toString()
-  const response = await fetch(url)
+  const response = await fetch(url, { signal: AbortSignal.timeout(10_000) })
   const data = await response.json()
   if (!response.ok) throw new Error(data?.error?.message || `YouTube API ${response.status}`)
-  return (data.items || []).map((item) => ({
+  return (data.items || []).filter((item) => /^[A-Za-z0-9_-]{11}$/.test(String(item.id?.videoId))).map((item) => ({
     id: item.id.videoId,
     title: item.snippet.title,
     channel: item.snippet.channelTitle,
     duration: '',
-    thumb: item.snippet.thumbnails?.medium?.url || `https://i.ytimg.com/vi/${item.id.videoId}/mqdefault.jpg`,
+    thumb: `https://i.ytimg.com/vi/${item.id.videoId}/mqdefault.jpg`, // sempre un indirizzo YouTube noto
   }))
 }
 
@@ -99,6 +101,9 @@ export async function searchVideos(query, env) {
   } else {
     videos = await viaScrape(q)
   }
-  if (videos.length) cache.set(q, { at: Date.now(), videos })
+  if (videos.length) {
+    if (cache.size >= 300) cache.delete(cache.keys().next().value) // la memoria non cresce senza limiti
+    cache.set(q, { at: Date.now(), videos })
+  }
   return videos
 }

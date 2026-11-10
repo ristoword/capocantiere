@@ -3,6 +3,7 @@ export function send(res, status, body) {
   res.statusCode = status
   res.setHeader('Content-Type', 'application/json; charset=utf-8')
   res.setHeader('Cache-Control', 'no-store')
+  res.setHeader('X-Content-Type-Options', 'nosniff')
   res.end(JSON.stringify(body))
 }
 
@@ -39,14 +40,20 @@ export function parseCookies(header) {
   const out = {}
   for (const part of String(header || '').split(';')) {
     const index = part.indexOf('=')
-    if (index > 0) out[part.slice(0, index).trim()] = decodeURIComponent(part.slice(index + 1).trim())
+    if (index <= 0) continue
+    try {
+      out[part.slice(0, index).trim()] = decodeURIComponent(part.slice(index + 1).trim())
+    } catch {
+      /* cookie malformato di altri servizi: si ignora, non deve rompere l'accesso */
+    }
   }
   return out
 }
 
 export function clientIp(req) {
-  const forwarded = String(req.headers['x-forwarded-for'] || '').split(',')[0].trim()
-  return forwarded || req.socket?.remoteAddress || 'unknown'
+  // Dietro il proxy di Railway l'ultimo indirizzo è quello aggiunto dal proxy (non falsificabile dal client).
+  const parts = String(req.headers['x-forwarded-for'] || '').split(',').map((part) => part.trim()).filter(Boolean)
+  return parts.at(-1) || req.socket?.remoteAddress || 'unknown'
 }
 
 /** Limitatore a finestra fissa, in memoria. */

@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import type { Project, StoredPhoto } from '../domain/types'
-import { configureStorage, deleteProjectCascade, flushQueue, listPhotos, listProjects, pendingChanges, putPhoto, putProject, SYNC_EVENT } from '../storage/db'
+import { clearSyncProblem, configureStorage, deleteProjectCascade, flushQueue, listPhotos, listProjects, pendingChanges, putPhoto, putProject, SYNC_EVENT, syncProblem } from '../storage/db'
 import { listPhotos as localPhotos, listProjects as localProjects } from '../storage/localdb'
 import { shrink } from '../lib/image'
 import { useAuth } from './Auth'
@@ -31,6 +31,9 @@ interface StoreValue {
   /** Modifiche fatte senza rete, in attesa di essere inviate. */
   pending: number
   online: boolean
+  /** Modifica rifiutata dal server durante la sincronizzazione (da mostrare all'utente). */
+  problem: string | null
+  dismissProblem: () => void
   error: string | null
   projects: Project[]
   saveProject: (project: Project) => Promise<void>
@@ -51,9 +54,13 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   if (userId) configureStorage(userId)
   const [pending, setPending] = useState(() => (userId ? pendingChanges() : 0))
   const [online, setOnline] = useState(() => navigator.onLine)
+  const [problem, setProblem] = useState<string | null>(null)
 
   useEffect(() => {
-    const sync = () => setPending(pendingChanges())
+    const sync = () => {
+      setPending(pendingChanges())
+      setProblem(syncProblem())
+    }
     const up = () => {
       setOnline(true)
       void flushQueue()
@@ -116,8 +123,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const photosFor = useCallback((projectId: string) => listPhotos(projectId), [])
 
   const value = useMemo(
-    () => ({ ready, pending, online, error, projects, saveProject, removeProject, addPhoto, photosFor }),
-    [ready, pending, online, error, projects, saveProject, removeProject, addPhoto, photosFor],
+    () => ({ ready, pending, online, problem, dismissProblem: clearSyncProblem, error, projects, saveProject, removeProject, addPhoto, photosFor }),
+    [ready, pending, online, problem, error, projects, saveProject, removeProject, addPhoto, photosFor],
   )
 
   return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>

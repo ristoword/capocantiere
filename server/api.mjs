@@ -18,17 +18,21 @@ const num = (value, fallback) => {
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback
 }
 
-export function hashPassword(password) {
+// scrypt gira nel pool di thread di Node: non blocca le altre richieste.
+const scrypt = (password, salt, length) =>
+  new Promise((resolve, reject) => crypto.scrypt(password, salt, length, (error, key) => (error ? reject(error) : resolve(key))))
+
+export async function hashPassword(password) {
   const salt = crypto.randomBytes(16)
-  const hash = crypto.scryptSync(password, salt, 64)
+  const hash = await scrypt(password, salt, 64)
   return `scrypt$${salt.toString('hex')}$${hash.toString('hex')}`
 }
 
-export function verifyPassword(password, stored) {
+export async function verifyPassword(password, stored) {
   const [scheme, saltHex, hashHex] = String(stored).split('$')
   if (scheme !== 'scrypt' || !saltHex || !hashHex) return false
   const expected = Buffer.from(hashHex, 'hex')
-  const actual = crypto.scryptSync(password, Buffer.from(saltHex, 'hex'), expected.length)
+  const actual = await scrypt(password, Buffer.from(saltHex, 'hex'), expected.length)
   return crypto.timingSafeEqual(actual, expected)
 }
 
@@ -76,7 +80,10 @@ export function createApi(env, options = {}) {
     image: num(env.IMAGE_DAILY_LIMIT, 40),
     video: num(env.VIDEO_DAILY_LIMIT, 200),
   }
-  const storageLimit = num(env.STORAGE_LIMIT_MB, 400) * MB
+  // Foto + fascicoli. Il limite tiene l'export JSON (base64) entro dimensioni gestibili in memoria.
+  const storageLimit = num(env.STORAGE_LIMIT_MB, 120) * MB
+  const mailReady = Boolean((env.RESEND_API_KEY || options.sendMail) && env.APP_URL)
+  const inflight = new Map()
   const nowIso = () => new Date().toISOString()
   const today = () => new Date().toISOString().slice(0, 10)
 
@@ -108,6 +115,8 @@ export function createApi(env, options = {}) {
       'INSERT INTO photos (user_id, id, project_id, phase_id, name, mime, created_at, data) VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(user_id, id) DO UPDATE SET project_id = excluded.project_id, phase_id = excluded.phase_id, name = excluded.name, mime = excluded.mime, created_at = excluded.created_at, data = excluded.data',
     ),
     photoBytes: db.prepare('SELECT COALESCE(SUM(LENGTH(data)), 0) AS n FROM photos WHERE user_id = ?'),
+    projectBytes: db.prepare('SELECT COALESCE(SUM(LENGTH(data)), 0) AS n FROM projects WHERE user_id = ?'),
+    adminCount: db.prepare('SELECT COUNT(*) AS n FROM users WHERE is_admin = 1'),
     allPhotos: db.prepare('SELECT id, project_id, phase_id, name, mime, created_at, data FROM photos WHERE user_id = ?'),
     setProfile: db.prepare('UPDATE users SET profile = ? WHERE id = ?'),
     setPrices: db.prepare('UPDATE users SET prices = ? WHERE id = ?'),
@@ -128,6 +137,7 @@ export function createApi(env, options = {}) {
     insertReset: db.prepare('INSERT OR REPLACE INTO reset_tokens (token_hash, user_id, expires_at) VALUES (?, ?, ?)'),
     resetGet: db.prepare('SELECT user_id FROM reset_tokens WHERE token_hash = ? AND expires_at > ?'),
     resetDelete: db.prepare('DELETE FROM reset_tokens WHERE token_hash = ?'),
+    resetDeleteUser: db.prepare('DELETE FROM reset_tokens WHERE user_id = ?'),
     usageGet: db.prepare('SELECT count FROM usage WHERE user_id = ? AND day = ? AND kind = ?'),
     usageAdd: db.prepare(
       'INSERT INTO usage (user_id, day, kind, count) VALUES (?, ?, ?, 1) ON CONFLICT(user_id, day, kind) DO UPDATE SET count = count + 1',
@@ -170,6 +180,8 @@ export function createApi(env, options = {}) {
   const monthStart = () => `${today().slice(0, 7)}-01`
   const overBudget = () => budget > 0 && q.monthCost.get(monthStart()).n >= budget
 
+  const usedBytes = (userId) => q.photoBytes.get(userId).n + q.projectBytes.get(userId).n
+
   function consume(user, kind) {
     const used = q.usageGet.get(user.id, today(), kind)?.count ?? 0
     if (used >= limits[kind]) return false
@@ -179,10 +191,12 @@ export function createApi(env, options = {}) {
 
   async function auth(req, res, route) {
     const ip = clientIp(req)
-    const guard = limiter(`auth:${ip}`, 15, 15 * 60 * 1000)
-    if (route !== 'me' && !guard.ok) {
-      res.setHeader('Retry-After', String(guard.retryAfter))
-      return fail(res, 429, 'Troppi tentativi. Riprova tra qualche minuto.')
+    if (route !== 'me') {
+      const guard = limiter(`auth:${ip}`, 15, 15 * 60 * 1000)
+      if (!guard.ok) {
+        res.setHeader('Retry-After', String(guard.retryAfter))
+        return fail(res, 429, 'Troppi tentativi. Riprova tra qualche minuto.')
+      }
     }
     if (route === 'me' && req.method === 'GET') {
       const user = currentUser(req)
@@ -203,21 +217,23 @@ export function createApi(env, options = {}) {
       if (q.userByEmail.get(email)) return fail(res, 409, 'Esiste già un account con questa email.')
       const id = crypto.randomUUID()
       const first = q.userCount.get().n === 0
-      q.insertUser.run(id, email, name, hashPassword(password), first ? 1 : 0, nowIso())
+      q.insertUser.run(id, email, name, await hashPassword(password), first ? 1 : 0, nowIso())
       startSession(req, res, id)
       return send(res, 201, { user: publicUser(q.userById.get(id)) })
     }
     if (route === 'login' && req.method === 'POST') {
       const body = await readJson(req, 20000)
       const email = String(body.email || '').trim().toLowerCase()
-      const perAccount = limiter(`login:${email}`, 8, 15 * 60 * 1000)
-      if (!perAccount.ok) {
-        res.setHeader('Retry-After', String(perAccount.retryAfter))
+      // Limite per coppia (email, IP): chi sbaglia non può bloccare l'account dall'esterno da altri indirizzi.
+      const perPair = limiter(`login:${email}:${ip}`, 8, 15 * 60 * 1000)
+      const perAccount = limiter(`login-acct:${email}`, 40, 15 * 60 * 1000)
+      if (!perPair.ok || !perAccount.ok) {
+        res.setHeader('Retry-After', String(Math.max(perPair.retryAfter, perAccount.retryAfter)))
         return fail(res, 429, 'Troppi tentativi su questo account. Riprova tra qualche minuto.')
       }
       const user = q.userByEmail.get(email)
       // Costo uguale con utente inesistente, per non rivelare quali email sono registrate.
-      const ok = user ? verifyPassword(String(body.password || ''), user.pass_hash) : (hashPassword('x'), false)
+      const ok = user ? await verifyPassword(String(body.password || ''), user.pass_hash) : (await hashPassword('x'), false)
       if (!user || !ok) return fail(res, 401, 'Email o password errate.')
       startSession(req, res, user.id)
       return send(res, 200, { user: publicUser(user) })
@@ -226,17 +242,18 @@ export function createApi(env, options = {}) {
       const body = await readJson(req, 20000)
       const email = String(body.email || '').trim().toLowerCase()
       const user = q.userByEmail.get(email)
-      if (user && (env.RESEND_API_KEY || options.sendMail)) {
+      if (user && mailReady) {
         const token = makeResetToken(user.id)
-        const base = String(env.APP_URL || `https://${req.headers.host}`).replace(/\/$/, '')
-        await send_mail(env, {
+        const base = String(env.APP_URL).replace(/\/$/, '') // mai l'intestazione Host: sarebbe falsificabile
+        // Senza attendere: i tempi di risposta non devono rivelare se l'email è registrata.
+        void send_mail(env, {
           to: user.email,
           subject: 'Reimposta la password di Capocantiere',
           text: `Per scegliere una nuova password apri questo link (valido 1 ora):\n${base}/reset?token=${token}\n\nSe non l'hai richiesto, ignora questa email.`,
         }).catch(() => undefined)
       }
       // Stessa risposta in ogni caso: non rivela se l'email è registrata.
-      return send(res, 200, { ok: true, emailEnabled: Boolean(env.RESEND_API_KEY || options.sendMail) })
+      return send(res, 200, { ok: true, emailEnabled: mailReady })
     }
     if (route === 'reset' && req.method === 'POST') {
       const body = await readJson(req, 20000)
@@ -245,9 +262,9 @@ export function createApi(env, options = {}) {
       const password = String(body.password || '')
       if (!row) return fail(res, 400, 'Link scaduto o non valido. Richiedine uno nuovo.')
       if (password.length < 8 || password.length > 200) return fail(res, 400, 'La password deve avere almeno 8 caratteri.')
-      q.setPassword.run(hashPassword(password), row.user_id)
+      q.setPassword.run(await hashPassword(password), row.user_id)
       q.deleteUserSessions.run(row.user_id)
-      q.resetDelete.run(hash)
+      q.resetDeleteUser.run(row.user_id) // invalida anche gli altri link ancora validi
       return send(res, 200, { ok: true })
     }
     if (route === 'logout' && req.method === 'POST') {
@@ -257,6 +274,13 @@ export function createApi(env, options = {}) {
       return send(res, 200, { ok: true })
     }
     return fail(res, 404, 'Percorso non trovato')
+  }
+
+  // Il logo deve essere un'immagine incorporata: mai un indirizzo esterno (tracciamento) né altro tipo di dato.
+  function cleanProfile(profile) {
+    if (typeof profile.logo === 'string' && (!/^data:image\/(png|jpeg|webp);base64,/.test(profile.logo) || profile.logo.length > 400_000)) profile.logo = ''
+    else if (typeof profile.logo !== 'string' && 'logo' in profile) profile.logo = ''
+    return profile
   }
 
   function projectsOk(value) {
@@ -300,7 +324,9 @@ export function createApi(env, options = {}) {
       if (id && !sub && method === 'PUT') {
         const body = await readJson(req, 4 * MB)
         if (!projectsOk(body) || body.id !== id) return fail(res, 400, 'Fascicolo non valido')
-        q.putProject.run(user.id, id, JSON.stringify(body), body.updatedAt)
+        const json = JSON.stringify(body)
+        if (usedBytes(user.id) + json.length > storageLimit + 20 * MB) return fail(res, 413, 'Spazio esaurito: elimina qualche lavoro o scarica un backup.')
+        q.putProject.run(user.id, id, json, body.updatedAt)
         return send(res, 200, { ok: true })
       }
       if (id && !sub && method === 'DELETE') {
@@ -327,7 +353,7 @@ export function createApi(env, options = {}) {
         }
         const bytes = await readRaw(req, 15 * MB)
         if (!bytes.length) return fail(res, 400, 'Foto vuota')
-        if (q.photoBytes.get(user.id).n + bytes.length > storageLimit) {
+        if (usedBytes(user.id) + bytes.length > storageLimit) {
           return fail(res, 413, 'Spazio foto esaurito. Elimina qualche lavoro o scarica un backup.')
         }
         insertPhoto(user.id, { ...meta, id, mime: req.headers['content-type'] }, bytes)
@@ -340,6 +366,7 @@ export function createApi(env, options = {}) {
       if (method === 'PUT') {
         const body = await readJson(req, kind === 'profile' ? 1 * MB : 100000)
         if (!body || typeof body !== 'object' || Array.isArray(body)) return fail(res, 400, 'Dati non validi')
+        if (kind === 'profile') cleanProfile(body)
         ;(kind === 'profile' ? q.setProfile : q.setPrices).run(JSON.stringify(body), user.id)
         return send(res, 200, { ok: true })
       }
@@ -377,7 +404,7 @@ export function createApi(env, options = {}) {
           q.putProject.run(user.id, project.id, JSON.stringify(project), project.updatedAt)
           projects += 1
         }
-        let used = q.photoBytes.get(user.id).n
+        let used = usedBytes(user.id)
         for (const photo of Array.isArray(body.photos) ? body.photos : []) {
           if (typeof photo?.base64 !== 'string') continue
           const bytes = Buffer.from(photo.base64, 'base64')
@@ -386,7 +413,10 @@ export function createApi(env, options = {}) {
           used += bytes.length
           photos += 1
         }
-        if (body.profile && typeof body.profile === 'object') q.setProfile.run(JSON.stringify(body.profile), user.id)
+        if (body.profile && typeof body.profile === 'object' && !Array.isArray(body.profile)) {
+          cleanProfile(body.profile)
+          q.setProfile.run(JSON.stringify(body.profile), user.id)
+        }
         if (body.prices && typeof body.prices === 'object') q.setPrices.run(JSON.stringify(body.prices), user.id)
         db.exec('COMMIT')
       } catch (error) {
@@ -401,11 +431,12 @@ export function createApi(env, options = {}) {
   async function account(req, res, user, route) {
     const body = await readJson(req, 20000)
     if (route === 'password' && req.method === 'POST') {
-      if (!verifyPassword(String(body.current || ''), user.pass_hash)) return fail(res, 401, 'Password attuale errata.')
+      if (!(await verifyPassword(String(body.current || ''), user.pass_hash))) return fail(res, 403, 'Password attuale errata.')
       const next = String(body.next || '')
       if (next.length < 8 || next.length > 200) return fail(res, 400, 'La nuova password deve avere almeno 8 caratteri.')
-      q.setPassword.run(hashPassword(next), user.id)
+      q.setPassword.run(await hashPassword(next), user.id)
       q.deleteUserSessions.run(user.id)
+      q.resetDeleteUser.run(user.id)
       startSession(req, res, user.id)
       return send(res, 200, { ok: true })
     }
@@ -414,7 +445,10 @@ export function createApi(env, options = {}) {
       return send(res, 200, { ok: true })
     }
     if (route === 'delete' && req.method === 'POST') {
-      if (!verifyPassword(String(body.password || ''), user.pass_hash)) return fail(res, 401, 'Password errata.')
+      if (!(await verifyPassword(String(body.password || ''), user.pass_hash))) return fail(res, 403, 'Password errata.')
+      if (user.is_admin && q.adminCount.get().n <= 1 && q.userCount.get().n > 1) {
+        return fail(res, 409, 'Sei l’unico amministratore: non puoi cancellare l’account finché ci sono altri utenti.')
+      }
       q.deleteUser.run(user.id) // le tabelle collegate si cancellano a cascata
       endSessionCookie(res)
       return send(res, 200, { ok: true })
@@ -452,18 +486,28 @@ export function createApi(env, options = {}) {
     }
     if (route === 'backup' && req.method === 'GET') {
       // Copia coerente del database, da scaricare e conservare fuori da Railway.
-      const file = makeBackup(db, backupDir)
+      // Copia temporanea (non entra nella rotazione dei backup automatici), inviata in streaming e poi cancellata.
+      const file = makeBackup(db, path.join(dataDir, 'tmp'))
       res.statusCode = 200
       res.setHeader('Content-Type', 'application/octet-stream')
       res.setHeader('Content-Disposition', `attachment; filename="${path.basename(file)}"`)
       res.setHeader('Cache-Control', 'no-store')
-      return res.end(fs.readFileSync(file))
+      const stream = fs.createReadStream(file)
+      const cleanup = () => fs.rm(file, { force: true }, () => undefined)
+      stream.on('close', cleanup)
+      stream.on('error', () => {
+        cleanup()
+        res.destroy()
+      })
+      stream.pipe(res)
+      return
     }
     if (route === 'reset-link' && req.method === 'POST') {
       const body = await readJson(req, 20000)
       const target = q.userById.get(String(body.userId || ''))
       if (!target) return fail(res, 404, 'Utente non trovato')
-      const base = String(env.APP_URL || `https://${req.headers.host}`).replace(/\/$/, '')
+      if (!env.APP_URL) return fail(res, 409, 'Imposta la variabile APP_URL (indirizzo pubblico del sito) per generare i link di reset.')
+      const base = String(env.APP_URL).replace(/\/$/, '')
       return send(res, 200, { link: `${base}/reset?token=${makeResetToken(target.id)}`, email: target.email })
     }
     return fail(res, 404, 'Percorso non trovato')
@@ -497,6 +541,10 @@ export function createApi(env, options = {}) {
         if (!consume(user, kind)) {
           return fail(res, 429, 'Hai raggiunto il limite giornaliero per questa funzione. Riprova domani.')
         }
+        const running = inflight.get(user.id) ?? 0
+        if (running >= 3) return fail(res, 429, 'Hai già richieste AI in corso: attendi che finiscano.')
+        inflight.set(user.id, running + 1)
+        res.on('close', () => inflight.set(user.id, Math.max(0, (inflight.get(user.id) ?? 1) - 1)))
         req.ccUser = user
         return ai(req, res, next)
       }
