@@ -39,3 +39,12 @@ const server = http.createServer((req, res) => {
 })
 const port = Number(env.PORT || 4173)
 server.listen(port, () => console.log(`Capocantiere su http://localhost:${port}`))
+
+// Spegnimento pulito (Railway invia SIGTERM a ogni nuovo deploy): smette di accettare richieste e chiude.
+for (const signal of ['SIGTERM', 'SIGINT']) {
+  process.on(signal, () => {
+    console.log(`${signal}: chiudo il server`)
+    server.close(() => process.exit(0))
+    setTimeout(() => process.exit(0), 5000).unref()
+  })
+}
