@@ -164,6 +164,24 @@ export interface Project {
   /** Conversazione con l'assistente AI del fascicolo. */
   chat?: ChatMessage[]
   quoteReview?: QuoteReview | null
+  /** Cliente e dati del preventivo formale. */
+  client?: ClientInfo
+  quoteMeta?: QuoteMeta
+}
+
+export interface ClientInfo {
+  name: string
+  address: string
+  phone: string
+  email: string
+}
+
+export interface QuoteMeta {
+  number: string
+  issuedAt: string
+  vatPercent: number
+  validDays: number
+  notes: string
 }
 
 export interface ModelDiagnosis {

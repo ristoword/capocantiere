@@ -74,3 +74,24 @@ Per l’elettricità il fascicolo chiede di togliere tensione, verificare l’as
 ## Video tutorial
 
 Nelle fasi e nella chat l'app cerca video **reali** su YouTube (titolo, canale, durata) tramite il server locale e li riproduce dentro l'app. Se chiedi «mostrami un video…» in chat, l'AI scrive la ricerca giusta; altrimenti c'è il pulsante «Mostra video su questo» sotto ogni risposta. Facoltativo: `YOUTUBE_API_KEY` in `.env.local` per usare l'API ufficiale di YouTube invece della lettura della pagina dei risultati.
+
+## Account, dati e limiti
+
+- **Accesso obbligatorio**: email e password (hash scrypt, sessione in cookie HttpOnly). La registrazione richiede `INVITE_CODE`; senza codice solo il primo utente può iscriversi e diventa amministratore. **Imposta sempre `INVITE_CODE` online.**
+- **Database SQLite** (`DATA_DIR`, predefinito `./data/capocantiere.db`, creato da solo con migrazioni): utenti, sessioni, fascicoli, foto, listino e profilo attività. Su Railway monta un Volume su `/data` e imposta `DATA_DIR=/data`.
+- **Limiti**: tentativi di accesso (per IP e per account), richieste AI/immagini/video al giorno per utente, spazio foto per utente (vedi `.env.example`).
+- **Backup**: Account → *Scarica backup* / *Ripristina da file*. Cancellazione account e dati dalla stessa pagina.
+- I lavori salvati in precedenza nel browser (IndexedDB) vengono caricati sul tuo account al primo accesso.
+- **Preventivo cliente**: intestazione con i dati dell'attività e logo, numerazione AAAA-NNN, IVA, validità, PDF (stampa), invio WhatsApp/email. **Listino**: prezzi e tariffe modificabili per account.
+- Pubblicazione negli store: vedi [STORE.md](STORE.md).
+
+## Sviluppo
+
+```bash
+npm install
+cp .env.example .env.local   # poi compila OPENAI_API_KEY e INVITE_CODE
+npm run dev                  # http://localhost:5173
+npm test && npx tsc --noEmit # la CI GitHub lancia anche la build
+```
+
+Serve Node 22.5 o successivo (database integrato `node:sqlite`).

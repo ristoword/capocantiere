@@ -1,6 +1,7 @@
 import { Link, useParams } from 'react-router-dom'
 import { CalcList, MaterialsTable, Notes, QuoteBox, SlopeCard } from '../components/project/Readout'
 import { useProjectPhotos } from '../components/project/usePhotos'
+import { RiskNotice } from '../components/RiskNotice'
 import { useStore } from '../context/Store'
 import { tradeById } from '../domain/trades'
 import { DIFFICULTY_LABEL, when } from '../lib/format'
@@ -51,6 +52,8 @@ export function ReportPage() {
         </p>
         <p className="quote-line">«{project.description}»</p>
       </header>
+
+      <RiskNotice trade={project.trade} />
 
       <section>
         <h2>Diagnosi del modello</h2>

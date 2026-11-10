@@ -42,5 +42,7 @@ export function mergeProject(existing: Project, computed: JobBody): Project {
     diagnosisError: existing.diagnosisError ?? '',
     chat: existing.chat ?? [],
     quoteReview: existing.quoteReview ?? null,
+    client: existing.client,
+    quoteMeta: existing.quoteMeta,
   })
 }

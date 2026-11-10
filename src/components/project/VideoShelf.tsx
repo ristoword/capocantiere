@@ -78,7 +78,14 @@ export function VideoShelf({ query, label = '📺 Guarda i video tutorial' }: { 
       >
         {busy ? '📺 Cerco i video…' : videos ? '📺 Aggiorna i video' : label}
       </button>
-      {error ? <p className="banner err">{error}</p> : null}
+      {error ? (
+        <p className="banner err">
+          {error}{' '}
+          <a href={`https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`} target="_blank" rel="noreferrer">
+            Cerca direttamente su YouTube ↗
+          </a>
+        </p>
+      ) : null}
       {videos ? <VideoList videos={videos} query={query} /> : null}
     </>
   )

@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { Assistant, GuideButton, QuoteReviewBox } from '../components/project/AiPanels'
 import { PhaseGuideView } from '../components/project/PhaseGuideView'
 import { VideoShelf } from '../components/project/VideoShelf'
+import { RiskNotice } from '../components/RiskNotice'
 import { PhotoDrop } from '../components/PhotoDrop'
 import { CalcList, MaterialsTable, Notes, QuoteBox, SlopeCard } from '../components/project/Readout'
 import { useProjectPhotos } from '../components/project/usePhotos'
@@ -181,6 +182,7 @@ export function ProjectPage() {
             </div>
           </div>
         </div>
+        <RiskNotice trade={project.trade} />
         <div className="proj-actions no-print">
           <Link className="btn sm" to={`/mestiere/${project.trade}?fascicolo=${project.id}`}>
             ✏️ Modifica misure
@@ -188,7 +190,10 @@ export function ProjectPage() {
           <button type="button" className="btn sm" onClick={() => void copyQuote()}>
             📋 Copia preventivo
           </button>
-          <Link className="btn sm solid" to={`/progetto/${project.id}/report`}>
+          <Link className="btn sm solid" to={`/progetto/${project.id}/preventivo`}>
+            🧾 Preventivo cliente
+          </Link>
+          <Link className="btn sm" to={`/progetto/${project.id}/report`}>
             📄 Report / PDF
           </Link>
           <button type="button" className="btn sm ghost danger" onClick={() => void remove()}>

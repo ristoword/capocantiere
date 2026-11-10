@@ -18,7 +18,8 @@ function useAiReady(): boolean | null {
 const LINKS = [
   { to: '/', label: 'Dashboard', ico: '🏠', end: true },
   { to: '/nuovo', label: 'Nuovo lavoro', ico: '➕', end: false },
-  { to: '/impostazioni', label: 'Impostazioni', ico: '⚙️', end: false },
+  { to: '/account', label: 'Account e listino', ico: '👤', end: false },
+  { to: '/impostazioni', label: 'Chiave AI', ico: '⚙️', end: false },
 ]
 
 export function Shell() {
@@ -73,8 +74,8 @@ export function Shell() {
           <NavLink to="/nuovo" className="plus">
             <span className="ico">＋</span>Nuovo
           </NavLink>
-          <NavLink to="/impostazioni">
-            <span className="ico">⚙️</span>Impostazioni
+          <NavLink to="/account">
+            <span className="ico">👤</span>Account
           </NavLink>
         </nav>
       </div>

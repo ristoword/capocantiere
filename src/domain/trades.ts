@@ -151,3 +151,19 @@ const STYLES: Record<TradeId, TradeStyle> = {
 export function tradeStyle(id: TradeId): TradeStyle {
   return STYLES[id]
 }
+
+/** Avvisi di sicurezza per i mestieri dove sbagliare può far male: mostrati in app e nei documenti. */
+export const TRADE_RISK: Partial<Record<TradeId, string>> = {
+  elettrica:
+    'Togli la corrente dal quadro e verifica con un tester che non ci sia tensione. Quadri, nuove linee e modifiche all’impianto fisso vanno eseguiti da un elettricista abilitato, con dichiarazione di conformità (DM 37/08).',
+  idraulica:
+    'Chiudi l’acqua a monte prima di smontare. Per gas, caldaie e scarichi condominiali serve un tecnico abilitato: una perdita di gas è un’emergenza (chiama il numero del gestore e i vigili del fuoco).',
+  tetti:
+    'Lavori in quota: non salire senza ponteggio, parapetti o linea vita e mai con superfici bagnate o vento. Sopra i 2 metri la normativa richiede protezioni anticaduta. Se non sei sicuro, chiama un’impresa specializzata.',
+  climatizzazione:
+    'La manipolazione dei gas refrigeranti richiede la certificazione F-gas; il collegamento elettrico va fatto da un abilitato. Qui puoi preparare solo posizionamento, staffe e scarico condensa.',
+  muratura:
+    'Prima di aprire tracce o demolire verifica che non siano muri portanti: serve un tecnico (e spesso una pratica edilizia). In edifici anteriori al 1992 sospetta amianto prima di rompere intonaci o coperture. Usa mascherina FFP2 e occhiali.',
+  giardino:
+    'Prima di scavare controlla la presenza di tubi, cavi e sottoservizi. Usa guanti e protezioni per gli attrezzi a motore.',
+}

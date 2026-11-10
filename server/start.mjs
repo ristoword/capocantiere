@@ -3,7 +3,7 @@ import http from 'node:http'
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { createAiMiddleware } from './aiProxy.mjs'
+import { createApi } from './api.mjs'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const dist = path.join(root, 'dist')
@@ -20,15 +20,20 @@ function loadEnvFile(name) {
 }
 
 const env = { ...loadEnvFile('.env'), ...loadEnvFile('.env.local'), ...process.env }
-const ai = createAiMiddleware(env)
-const types = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.png': 'image/png', '.json': 'application/json' }
+const ai = createApi(env)
+const types = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.png': 'image/png', '.json': 'application/json', '.webmanifest': 'application/manifest+json', '.ico': 'image/x-icon', '.jpg': 'image/jpeg', '.woff2': 'font/woff2' }
 
 const server = http.createServer((req, res) => {
   ai(req, res, () => {
     const clean = decodeURIComponent((req.url || '/').split('?')[0])
     let file = path.join(dist, clean)
     if (!file.startsWith(dist) || !fs.existsSync(file) || fs.statSync(file).isDirectory()) file = path.join(dist, 'index.html')
-    res.setHeader('Content-Type', types[path.extname(file)] || 'application/octet-stream')
+    const ext = path.extname(file)
+    res.setHeader('Content-Type', types[ext] || 'application/octet-stream')
+    res.setHeader('X-Content-Type-Options', 'nosniff')
+    res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin')
+    if (clean.startsWith('/assets/')) res.setHeader('Cache-Control', 'public, max-age=31536000, immutable')
+    else res.setHeader('Cache-Control', 'no-cache')
     fs.createReadStream(file).pipe(res)
   })
 })

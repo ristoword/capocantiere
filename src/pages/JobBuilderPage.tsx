@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { InputsForm } from '../components/InputsForm'
+import { RiskNotice } from '../components/RiskNotice'
 import { PhotoDrop } from '../components/PhotoDrop'
 import { TradeGrid } from '../components/TradeGrid'
 import { useStore } from '../context/Store'
@@ -331,6 +332,7 @@ function Builder({ tradeId, fascicolo }: { tradeId: TradeId | null; fascicolo: s
                   <textarea value={description} onChange={(event) => setDescription(event.target.value)} />
                 </label>
               ) : null}
+              <RiskNotice trade={trade} />
               <InputsForm
                 trade={trade}
                 inputs={inputs}
