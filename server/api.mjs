@@ -82,6 +82,10 @@ export function createApi(env, options = {}) {
   }
   // Foto + fascicoli. Il limite tiene l'export JSON (base64) entro dimensioni gestibili in memoria.
   const storageLimit = num(env.STORAGE_LIMIT_MB, 120) * MB
+  // Account senza quote giornaliere né limite di spazio (restano burst, richieste in parallelo e budget mensile globale).
+  const unlimited = new Set(String(env.UNLIMITED_EMAILS || '').split(',').map((e) => e.trim().toLowerCase()).filter(Boolean))
+  const isUnlimited = (user) => unlimited.has(String(user.email || '').toLowerCase())
+  const storageLimitFor = (user) => (isUnlimited(user) ? Number.MAX_SAFE_INTEGER / 2 : storageLimit)
   const mailReady = Boolean((env.RESEND_API_KEY || options.sendMail) && env.APP_URL)
   const inflight = new Map()
   const nowIso = () => new Date().toISOString()
@@ -183,6 +187,7 @@ export function createApi(env, options = {}) {
   const usedBytes = (userId) => q.photoBytes.get(userId).n + q.projectBytes.get(userId).n
 
   function consume(user, kind) {
+    if (isUnlimited(user)) return true
     const used = q.usageGet.get(user.id, today(), kind)?.count ?? 0
     if (used >= limits[kind]) return false
     q.usageAdd.run(user.id, today(), kind)
@@ -325,7 +330,7 @@ export function createApi(env, options = {}) {
         const body = await readJson(req, 4 * MB)
         if (!projectsOk(body) || body.id !== id) return fail(res, 400, 'Fascicolo non valido')
         const json = JSON.stringify(body)
-        if (usedBytes(user.id) + json.length > storageLimit + 20 * MB) return fail(res, 413, 'Spazio esaurito: elimina qualche lavoro o scarica un backup.')
+        if (usedBytes(user.id) + json.length > storageLimitFor(user) + 20 * MB) return fail(res, 413, 'Spazio esaurito: elimina qualche lavoro o scarica un backup.')
         q.putProject.run(user.id, id, json, body.updatedAt)
         return send(res, 200, { ok: true })
       }
@@ -353,7 +358,7 @@ export function createApi(env, options = {}) {
         }
         const bytes = await readRaw(req, 15 * MB)
         if (!bytes.length) return fail(res, 400, 'Foto vuota')
-        if (usedBytes(user.id) + bytes.length > storageLimit) {
+        if (usedBytes(user.id) + bytes.length > storageLimitFor(user)) {
           return fail(res, 413, 'Spazio foto esaurito. Elimina qualche lavoro o scarica un backup.')
         }
         insertPhoto(user.id, { ...meta, id, mime: req.headers['content-type'] }, bytes)
@@ -408,7 +413,7 @@ export function createApi(env, options = {}) {
         for (const photo of Array.isArray(body.photos) ? body.photos : []) {
           if (typeof photo?.base64 !== 'string') continue
           const bytes = Buffer.from(photo.base64, 'base64')
-          if (!bytes.length || used + bytes.length > storageLimit) continue
+          if (!bytes.length || used + bytes.length > storageLimitFor(user)) continue
           insertPhoto(user.id, photo, bytes)
           used += bytes.length
           photos += 1

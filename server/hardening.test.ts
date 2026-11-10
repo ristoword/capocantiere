@@ -28,6 +28,37 @@ beforeAll(async () => {
 })
 afterAll(() => app.close())
 
+describe('account senza limiti (UNLIMITED_EMAILS)', () => {
+  it('salta quote giornaliere e spazio solo per le email indicate', async () => {
+    const api = createApi(
+      { SIGNUP_OPEN: 'true', AI_DAILY_LIMIT: '1', STORAGE_LIMIT_MB: '1', UNLIMITED_EMAILS: 'Vip@Test.it', OPENAI_API_KEY: '' },
+      { db: openDatabase(':memory:') },
+    )
+    const srv = http.createServer((req, res) => api(req, res, () => { res.statusCode = 404; res.end('{}') }))
+    await new Promise<void>((resolve) => srv.listen(0, resolve))
+    const url = `http://127.0.0.1:${(srv.address() as { port: number }).port}`
+    const go = async (path: string, cookie: string, body?: BodyInit, headers: Record<string, string> = {}) =>
+      fetch(url + path, { method: body ? 'PUT' : 'POST', headers: { 'X-Requested-With': 'capocantiere', Cookie: cookie, ...headers }, body: body ?? '{"messages":[]}' })
+    const reg = async (email: string) => {
+      const r = await fetch(url + '/api/auth/register', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'capocantiere' }, body: JSON.stringify({ email, password: 'password123' }) })
+      return r.headers.get('set-cookie')!.split(';')[0]
+    }
+    const normal = await reg('normale@test.it')
+    const vip = await reg('vip@test.it')
+    const meta = encodeURIComponent(JSON.stringify({ projectId: 'p', name: 'x', createdAt: '2026-01-01T00:00:00Z' }))
+    const big = new Uint8Array(700_000)
+    const photo = (id: string, cookie: string) => go(`/api/data/photos/${id}`, cookie, big, { 'Content-Type': 'image/jpeg', 'x-photo-meta': meta })
+    for (const cookie of [normal, vip]) await go('/api/ai/chat', cookie)
+    expect((await go('/api/ai/chat', normal)).status).toBe(429)
+    expect((await go('/api/ai/chat', vip)).status).not.toBe(429)
+    await photo('a', normal)
+    await photo('a', vip)
+    expect((await photo('b', normal)).status).toBe(413)
+    expect((await photo('b', vip)).status).toBe(200)
+    srv.close()
+  })
+})
+
 describe('protezioni aggiuntive', () => {
   let cookie = ''
 
