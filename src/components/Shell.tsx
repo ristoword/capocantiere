@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, NavLink, Outlet, useLocation } from 'react-router-dom'
+import { useAuth } from '../context/Auth'
 import { useStore } from '../context/Store'
 import { hasApiKey } from '../storage/settings'
 
@@ -23,7 +24,8 @@ const LINKS = [
 ]
 
 export function Shell() {
-  const { error } = useStore()
+  const { error, pending, online } = useStore()
+  const { user } = useAuth()
   const { pathname } = useLocation()
   useEffect(() => {
     window.scrollTo(0, 0)
@@ -40,7 +42,7 @@ export function Shell() {
           </span>
         </Link>
         <nav className="nav" aria-label="Menu principale">
-          {LINKS.map((item) => (
+          {[...LINKS, ...(user?.isAdmin ? [{ to: '/admin', label: 'Amministrazione', ico: '🛡️', end: false }] : [])].map((item) => (
             <NavLink key={item.to} to={item.to} end={item.end}>
               <span className="ico">{item.ico}</span>
               {item.label}
@@ -63,6 +65,12 @@ export function Shell() {
           </Link>
           <span className={ai ? 'ai-pill on' : 'ai-pill off'}>{ai ? 'AI attiva' : 'AI off'}</span>
         </header>
+        {!online || pending > 0 ? (
+          <p className="banner warn no-print" role="status">
+            {!online ? '📴 Sei offline: puoi continuare a lavorare, le modifiche si inviano da sole quando torna la rete.' : '🔄 Sincronizzo le modifiche fatte offline…'}
+            {pending > 0 ? ` (${pending} in attesa)` : ''}
+          </p>
+        ) : null}
         {error ? <p className="banner err no-print">{error}</p> : null}
         <main className="wrap">
           <Outlet />

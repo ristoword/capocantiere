@@ -10,6 +10,9 @@ import { JobBuilderPage } from './pages/JobBuilderPage'
 import { ProjectPage } from './pages/ProjectPage'
 import { AccountPage } from './pages/AccountPage'
 import { QuotePage } from './pages/QuotePage'
+import { AdminPage } from './pages/AdminPage'
+import { ResetPage } from './pages/ResetPage'
+import { SitePage } from './pages/SitePage'
 import { ReportPage } from './pages/ReportPage'
 import { SettingsPage } from './pages/SettingsPage'
 
@@ -52,6 +55,8 @@ function Gate() {
             <Route path="/progetto/:id/report" element={<ReportPage />} />
             <Route path="/progetto/:id/preventivo" element={<QuotePage />} />
             <Route path="/account" element={<AccountPage />} />
+            <Route path="/admin" element={<AdminPage />} />
+            <Route path="/cantiere/:name" element={<SitePage />} />
             <Route path="*" element={<Missing />} />
         </Route>
       </Routes>
@@ -65,6 +70,7 @@ export function App() {
     <AuthProvider>
       <BrowserRouter>
         <Routes>
+          <Route path="/reset" element={<ResetPage />} />
           <Route path="/privacy" element={<LegalPage kind="privacy" />} />
           <Route path="/termini" element={<LegalPage kind="termini" />} />
           <Route path="*" element={<Gate />} />

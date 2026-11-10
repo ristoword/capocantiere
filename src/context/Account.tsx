@@ -2,6 +2,8 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState } 
 import { applyPriceBook, type PriceMap } from '../domain/priceBook'
 import { api } from '../lib/http'
 
+const CACHE = 'capocantiere-account-cache'
+
 export interface BusinessProfile {
   businessName: string
   vatId: string
@@ -44,8 +46,25 @@ export function AccountProvider({ children }: { children: React.ReactNode }) {
         applyPriceBook(pr.prices)
         setProfile({ ...EMPTY_PROFILE, ...p.profile })
         setPrices(pr.prices)
+        try {
+          localStorage.setItem(CACHE, JSON.stringify({ profile: p.profile, prices: pr.prices }))
+        } catch {
+          /* niente copia locale */
+        }
       })
-      .catch(() => undefined)
+      .catch(() => {
+        // Offline: si usano profilo e listino dell'ultimo accesso.
+        try {
+          const cached = JSON.parse(localStorage.getItem(CACHE) ?? 'null') as { profile: Partial<BusinessProfile>; prices: PriceMap } | null
+          if (cached && alive) {
+            applyPriceBook(cached.prices)
+            setProfile({ ...EMPTY_PROFILE, ...cached.profile })
+            setPrices(cached.prices)
+          }
+        } catch {
+          /* niente */
+        }
+      })
       .finally(() => alive && setLoaded(true))
     return () => {
       alive = false

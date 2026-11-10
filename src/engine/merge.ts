@@ -44,5 +44,7 @@ export function mergeProject(existing: Project, computed: JobBody): Project {
     quoteReview: existing.quoteReview ?? null,
     client: existing.client,
     quoteMeta: existing.quoteMeta,
+    status: existing.status,
+    siteName: existing.siteName,
   })
 }

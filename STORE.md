@@ -17,7 +17,7 @@ L'app è una PWA installabile (manifest, icone 192/512/maskable, service worker)
 2. **Titolare del trattamento**: completa l'informativa con ragione sociale, indirizzo e P. IVA del gestore (richiesto per l'App Store).
 3. **Database persistente**: su Railway aggiungi un Volume montato su `/data` e imposta `DATA_DIR=/data`, altrimenti i dati si perdono a ogni deploy.
 4. **Registrazione**: per gli store gli utenti devono potersi iscrivere da soli. Con `INVITE_CODE` impostato serve il codice; per un lancio pubblico imposta `SIGNUP_OPEN=true` e tieni attivi i limiti giornalieri (`AI_DAILY_LIMIT`, ecc.) per contenere il costo OpenAI. Valuta un abbonamento o crediti per coprire i costi.
-5. **Verifica email e recupero password**: non ci sono ancora (serve un servizio di invio email). Oggi chi perde la password deve essere reimpostato a mano nel database.
+5. **Recupero password**: attivo. Per l'invio automatico via email imposta `RESEND_API_KEY` (e `MAIL_FROM` con un dominio verificato); senza, l'amministratore genera il link dal pannello Amministrazione. La verifica dell'email in fase di iscrizione non c'è ancora.
 6. **Schede store**: screenshot, descrizione, categoria, età minima, dichiarazione dei dati raccolti (Apple "Privacy nutrition label", Google "Data safety": email, foto, contenuti utente; condivisi con OpenAI per l'elaborazione).
 
 ## Google Play (il percorso più rapido)
@@ -46,5 +46,5 @@ Occorrono un Mac con Xcode e l'Apple Developer Program (99 USD/anno). Apple tend
 
 ## Limiti noti
 
-- Niente funzionamento offline dei dati: offline si apre solo la schermata di base.
+- Offline: l'app si apre e i lavori già caricati si leggono e si modificano; le modifiche si sincronizzano al ritorno della rete. Le funzioni AI e i video richiedono la rete.
 - Le foto per l'analisi AI passano da OpenAI: dillo chiaramente nella scheda store.

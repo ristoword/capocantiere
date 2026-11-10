@@ -1,9 +1,11 @@
 // API di Capocantiere: account, sessioni, dati persistenti (progetti, foto, listino, profilo), limiti d'uso.
 import crypto from 'node:crypto'
+import fs from 'node:fs'
 import path from 'node:path'
 import { openDatabase } from './db.mjs'
 import { clientIp, createLimiter, fail, parseCookies, readJson, readRaw, send } from './http.mjs'
 import { createAiMiddleware } from './aiProxy.mjs'
+import { listBackups, makeBackup } from './backup.mjs'
 
 const COOKIE = 'cc_session'
 const SESSION_DAYS = 30
@@ -37,9 +39,35 @@ const safeEqual = (a, b) => {
   return left.length === right.length && crypto.timingSafeEqual(left, right)
 }
 
+// Prezzi indicativi in USD per milione di token (ingresso, uscita). Modificabili con COST_IN_PER_M / COST_OUT_PER_M.
+const RATES = [
+  ['gpt-4o-mini', 0.15, 0.6],
+  ['gpt-4o', 2.5, 10],
+  ['gpt-4.1-mini', 0.4, 1.6],
+  ['gpt-4.1', 2, 8],
+]
+
+export function estimateCost(env, usage) {
+  if (usage.kind === 'image') return num(env.IMAGE_COST_USD, 0.01)
+  const model = String(usage.model || '')
+  const found = RATES.find(([prefix]) => model.startsWith(prefix)) ?? ['', 2.5, 10]
+  const inRate = num(env.COST_IN_PER_M, found[1])
+  const outRate = num(env.COST_OUT_PER_M, found[2])
+  return (usage.tokensIn * inRate + usage.tokensOut * outRate) / 1_000_000
+}
+
 export function createApi(env, options = {}) {
   const db = options.db ?? openDatabase(path.resolve(env.DATA_DIR || './data', 'capocantiere.db'))
-  const ai = createAiMiddleware(env)
+  const send_mail = options.sendMail ?? sendMail
+  const dataDir = path.resolve(env.DATA_DIR || './data')
+  const backupDir = path.join(dataDir, 'backups')
+  const ai = createAiMiddleware(env, {
+    onUsage(req, usage) {
+      const user = req.ccUser
+      if (!user) return
+      q.spendAdd.run(user.id, today(), usage.kind, usage.tokensIn, usage.tokensOut, estimateCost(env, usage), usage.tokensIn, usage.tokensOut, estimateCost(env, usage))
+    },
+  })
   const limiter = createLimiter()
   const inviteCode = String(env.INVITE_CODE || '').trim()
   const signupOpen = String(env.SIGNUP_OPEN || '').toLowerCase() === 'true'
@@ -84,6 +112,22 @@ export function createApi(env, options = {}) {
     setProfile: db.prepare('UPDATE users SET profile = ? WHERE id = ?'),
     setPrices: db.prepare('UPDATE users SET prices = ? WHERE id = ?'),
     setName: db.prepare('UPDATE users SET name = ? WHERE id = ?'),
+    spendAdd: db.prepare(
+      'INSERT INTO spend (user_id, day, kind, calls, tokens_in, tokens_out, cost) VALUES (?, ?, ?, 1, ?, ?, ?) ON CONFLICT(user_id, day, kind) DO UPDATE SET calls = calls + 1, tokens_in = tokens_in + ?, tokens_out = tokens_out + ?, cost = cost + ?',
+    ),
+    monthCost: db.prepare('SELECT COALESCE(SUM(cost), 0) AS n FROM spend WHERE day >= ?'),
+    overview: db.prepare(
+      `SELECT u.id, u.email, u.name, u.is_admin, u.created_at,
+        (SELECT COUNT(*) FROM projects p WHERE p.user_id = u.id) AS projects,
+        (SELECT COALESCE(SUM(LENGTH(data)), 0) FROM photos f WHERE f.user_id = u.id) AS photo_bytes,
+        (SELECT COALESCE(SUM(calls), 0) FROM spend s WHERE s.user_id = u.id AND s.day >= ?) AS calls,
+        (SELECT COALESCE(SUM(cost), 0) FROM spend s WHERE s.user_id = u.id AND s.day >= ?) AS cost
+       FROM users u ORDER BY u.created_at`,
+    ),
+    daily: db.prepare('SELECT day, SUM(calls) AS calls, SUM(cost) AS cost FROM spend WHERE day >= ? GROUP BY day ORDER BY day'),
+    insertReset: db.prepare('INSERT OR REPLACE INTO reset_tokens (token_hash, user_id, expires_at) VALUES (?, ?, ?)'),
+    resetGet: db.prepare('SELECT user_id FROM reset_tokens WHERE token_hash = ? AND expires_at > ?'),
+    resetDelete: db.prepare('DELETE FROM reset_tokens WHERE token_hash = ?'),
     usageGet: db.prepare('SELECT count FROM usage WHERE user_id = ? AND day = ? AND kind = ?'),
     usageAdd: db.prepare(
       'INSERT INTO usage (user_id, day, kind, count) VALUES (?, ?, ?, 1) ON CONFLICT(user_id, day, kind) DO UPDATE SET count = count + 1',
@@ -91,6 +135,12 @@ export function createApi(env, options = {}) {
   }
 
   const publicUser = (user) => ({ id: user.id, email: user.email, name: user.name, isAdmin: user.is_admin === 1 })
+
+  function makeResetToken(userId) {
+    const token = crypto.randomBytes(24).toString('base64url')
+    q.insertReset.run(sha(token), userId, Date.now() + 3600 * 1000)
+    return token
+  }
 
   function signupMode() {
     if (inviteCode) return 'invite'
@@ -115,6 +165,10 @@ export function createApi(env, options = {}) {
     if (!token) return null
     return q.sessionUser.get(sha(token), Date.now()) ?? null
   }
+
+  const budget = num(env.MONTHLY_BUDGET_USD, 0)
+  const monthStart = () => `${today().slice(0, 7)}-01`
+  const overBudget = () => budget > 0 && q.monthCost.get(monthStart()).n >= budget
 
   function consume(user, kind) {
     const used = q.usageGet.get(user.id, today(), kind)?.count ?? 0
@@ -167,6 +221,34 @@ export function createApi(env, options = {}) {
       if (!user || !ok) return fail(res, 401, 'Email o password errate.')
       startSession(req, res, user.id)
       return send(res, 200, { user: publicUser(user) })
+    }
+    if (route === 'forgot' && req.method === 'POST') {
+      const body = await readJson(req, 20000)
+      const email = String(body.email || '').trim().toLowerCase()
+      const user = q.userByEmail.get(email)
+      if (user && (env.RESEND_API_KEY || options.sendMail)) {
+        const token = makeResetToken(user.id)
+        const base = String(env.APP_URL || `https://${req.headers.host}`).replace(/\/$/, '')
+        await send_mail(env, {
+          to: user.email,
+          subject: 'Reimposta la password di Capocantiere',
+          text: `Per scegliere una nuova password apri questo link (valido 1 ora):\n${base}/reset?token=${token}\n\nSe non l'hai richiesto, ignora questa email.`,
+        }).catch(() => undefined)
+      }
+      // Stessa risposta in ogni caso: non rivela se l'email è registrata.
+      return send(res, 200, { ok: true, emailEnabled: Boolean(env.RESEND_API_KEY || options.sendMail) })
+    }
+    if (route === 'reset' && req.method === 'POST') {
+      const body = await readJson(req, 20000)
+      const hash = sha(String(body.token || ''))
+      const row = q.resetGet.get(hash, Date.now())
+      const password = String(body.password || '')
+      if (!row) return fail(res, 400, 'Link scaduto o non valido. Richiedine uno nuovo.')
+      if (password.length < 8 || password.length > 200) return fail(res, 400, 'La password deve avere almeno 8 caratteri.')
+      q.setPassword.run(hashPassword(password), row.user_id)
+      q.deleteUserSessions.run(row.user_id)
+      q.resetDelete.run(hash)
+      return send(res, 200, { ok: true })
     }
     if (route === 'logout' && req.method === 'POST') {
       const token = parseCookies(req.headers.cookie)[COOKIE]
@@ -340,7 +422,54 @@ export function createApi(env, options = {}) {
     return fail(res, 404, 'Percorso non trovato')
   }
 
-  return async function apiMiddleware(req, res, next) {
+  async function admin(req, res, user, route) {
+    if (!user.is_admin) return fail(res, 403, 'Solo per l’amministratore')
+    if (route === 'overview' && req.method === 'GET') {
+      const since = monthStart()
+      const days = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10)
+      const users = q.overview.all(since, since).map((row) => ({
+        id: row.id,
+        email: row.email,
+        name: row.name,
+        isAdmin: row.is_admin === 1,
+        createdAt: row.created_at,
+        projects: row.projects,
+        photoMb: Math.round((row.photo_bytes / MB) * 10) / 10,
+        calls: row.calls,
+        cost: Math.round(row.cost * 10000) / 10000,
+      }))
+      return send(res, 200, {
+        budget,
+        monthCost: Math.round(q.monthCost.get(since).n * 10000) / 10000,
+        model: String(env.OPENAI_MODEL || 'gpt-4o-mini'),
+        emailEnabled: Boolean(env.RESEND_API_KEY),
+        users,
+        days: q.daily.all(days).map((row) => ({ day: row.day, calls: row.calls, cost: Math.round(row.cost * 10000) / 10000 })),
+      })
+    }
+    if (route === 'backups' && req.method === 'GET') {
+      return send(res, 200, { backups: listBackups(backupDir) })
+    }
+    if (route === 'backup' && req.method === 'GET') {
+      // Copia coerente del database, da scaricare e conservare fuori da Railway.
+      const file = makeBackup(db, backupDir)
+      res.statusCode = 200
+      res.setHeader('Content-Type', 'application/octet-stream')
+      res.setHeader('Content-Disposition', `attachment; filename="${path.basename(file)}"`)
+      res.setHeader('Cache-Control', 'no-store')
+      return res.end(fs.readFileSync(file))
+    }
+    if (route === 'reset-link' && req.method === 'POST') {
+      const body = await readJson(req, 20000)
+      const target = q.userById.get(String(body.userId || ''))
+      if (!target) return fail(res, 404, 'Utente non trovato')
+      const base = String(env.APP_URL || `https://${req.headers.host}`).replace(/\/$/, '')
+      return send(res, 200, { link: `${base}/reset?token=${makeResetToken(target.id)}`, email: target.email })
+    }
+    return fail(res, 404, 'Percorso non trovato')
+  }
+
+  async function apiMiddleware(req, res, next) {
     const url = (req.url || '').split('?')[0]
     if (!url.startsWith('/api/')) return next()
     try {
@@ -356,6 +485,7 @@ export function createApi(env, options = {}) {
       if (Math.random() < 0.01) q.purgeSessions.run(Date.now())
       if (parts[0] === 'data') return await data(req, res, user, parts.slice(1))
       if (parts[0] === 'account') return await account(req, res, user, parts[1])
+      if (parts[0] === 'admin') return await admin(req, res, user, parts[1])
       if (parts[0] === 'ai' || parts[0] === 'yt') {
         const kind = url === '/api/ai/image' ? 'image' : parts[0] === 'yt' ? 'video' : 'ai'
         const burst = limiter(`burst:${user.id}`, 30, 60 * 1000)
@@ -363,9 +493,11 @@ export function createApi(env, options = {}) {
           res.setHeader('Retry-After', String(burst.retryAfter))
           return fail(res, 429, 'Troppe richieste in poco tempo. Attendi un minuto.')
         }
+        if (overBudget()) return fail(res, 503, 'Il budget mensile dell’AI è esaurito. Riprova il mese prossimo o chiedi all’amministratore.')
         if (!consume(user, kind)) {
           return fail(res, 429, 'Hai raggiunto il limite giornaliero per questa funzione. Riprova domani.')
         }
+        req.ccUser = user
         return ai(req, res, next)
       }
       return fail(res, 404, 'Percorso non trovato')
@@ -374,4 +506,17 @@ export function createApi(env, options = {}) {
       return fail(res, status, status === 500 ? 'Errore del server' : error.message)
     }
   }
+  apiMiddleware.db = db
+  return apiMiddleware
+}
+
+async function sendMail(env, { to, subject, text }) {
+  const key = String(env.RESEND_API_KEY || '').trim()
+  if (!key) throw new Error('Email non configurata')
+  const response = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ from: env.MAIL_FROM || 'Capocantiere <onboarding@resend.dev>', to: [to], subject, text }),
+  })
+  if (!response.ok) throw new Error(`Invio email non riuscito (${response.status})`)
 }

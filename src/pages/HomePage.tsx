@@ -1,17 +1,21 @@
-import type { CSSProperties } from 'react'
+import { useState, type CSSProperties } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { PhotoDrop } from '../components/PhotoDrop'
 import { TradeGrid } from '../components/TradeGrid'
 import { useStore } from '../context/Store'
 import { tradeById, tradeStyle } from '../domain/trades'
 import { DIFFICULTY_LABEL, euro, when } from '../lib/format'
+import { inSite, siteNames, siteOf, STATUS_ICON, STATUS_LABEL, STATUSES, statusOf, summarizeByStatus } from '../lib/jobs'
+import type { QuoteStatus } from '../domain/types'
 
 export function HomePage() {
   const navigate = useNavigate()
   const { ready, projects, removeProject } = useStore()
+  const [statusFilter, setStatusFilter] = useState<QuoteStatus | 'tutti'>('tutti')
+  const [siteFilter, setSiteFilter] = useState('')
 
   async function onDelete(id: string, title: string) {
-    if (!window.confirm(`Eliminare «${title}» e le sue foto da questo browser? Non si può annullare.`)) return
+    if (!window.confirm(`Eliminare «${title}» e le sue foto dal tuo account? Non si può annullare.`)) return
     await removeProject(id)
   }
 
@@ -20,6 +24,11 @@ export function HomePage() {
   const progress = phasesTotal ? Math.round((phasesDone / phasesTotal) * 100) : 0
   const total = projects.reduce((sum, project) => sum + project.quote.totalEuro, 0)
   const active = projects.filter((project) => project.phases.some((phase) => !phase.done))
+  const summary = summarizeByStatus(projects)
+  const sites = siteNames(projects)
+  const visible = projects.filter(
+    (project) => (statusFilter === 'tutti' || statusOf(project) === statusFilter) && (!siteFilter || inSite(project, siteFilter)),
+  )
   const next = active[0]
   const nextPhase = next?.phases.find((phase) => !phase.done)
 
@@ -84,6 +93,10 @@ export function HomePage() {
           <span>Preventivi totali</span>
           <strong>{euro(total)}</strong>
         </div>
+        <div className="kpi" style={{ '--c': '#0ea5e9' } as CSSProperties}>
+          <span>Accettati</span>
+          <strong>{euro(summary.accettato.total)}</strong>
+        </div>
         <div className="kpi" style={{ '--c': '#10b981' } as CSSProperties}>
           <span>Avanzamento</span>
           <strong>{progress}%</strong>
@@ -108,6 +121,37 @@ export function HomePage() {
           ➕ Nuovo lavoro
         </Link>
       </div>
+      {projects.length > 0 ? (
+        <div className="filters no-print">
+          <div className="chips" role="group" aria-label="Filtra per stato">
+            <button type="button" className={statusFilter === 'tutti' ? 'chip on' : 'chip'} onClick={() => setStatusFilter('tutti')}>
+              Tutti ({projects.length})
+            </button>
+            {STATUSES.map((status) => (
+              <button key={status} type="button" className={statusFilter === status ? 'chip on' : 'chip'} onClick={() => setStatusFilter(status)}>
+                {STATUS_ICON[status]} {STATUS_LABEL[status]} ({summary[status].count})
+              </button>
+            ))}
+          </div>
+          {sites.length > 0 ? (
+            <div className="chips" role="group" aria-label="Filtra per cantiere">
+              <button type="button" className={siteFilter === '' ? 'chip on' : 'chip'} onClick={() => setSiteFilter('')}>
+                Tutti i cantieri
+              </button>
+              {sites.map((name) => (
+                <button key={name} type="button" className={siteFilter === name ? 'chip on' : 'chip'} onClick={() => setSiteFilter(name)}>
+                  🏗 {name}
+                </button>
+              ))}
+              {siteFilter ? (
+                <Link className="btn sm solid" to={`/cantiere/${encodeURIComponent(siteFilter)}`}>
+                  🧾 Preventivo unico del cantiere
+                </Link>
+              ) : null}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
       {!ready ? <p>Apro l’archivio…</p> : null}
       {ready && projects.length === 0 ? (
         <div className="empty">
@@ -119,7 +163,7 @@ export function HomePage() {
         </div>
       ) : null}
       <div className="job-list">
-        {projects.map((project) => {
+        {visible.map((project) => {
           const trade = tradeById(project.trade)
           const style = tradeStyle(project.trade)
           const done = project.phases.filter((phase) => phase.done).length
@@ -134,6 +178,10 @@ export function HomePage() {
                     <strong>{project.title}</strong>
                     <em>
                       {trade.name} · difficoltà {DIFFICULTY_LABEL[difficulty].toLowerCase()}
+                    </em>
+                    <em>
+                      {STATUS_ICON[statusOf(project)]} {STATUS_LABEL[statusOf(project)]}
+                      {siteOf(project) ? ` · 🏗 ${siteOf(project)}` : ''}
                     </em>
                   </div>
                 </div>

@@ -4,6 +4,8 @@ import { Assistant, GuideButton, QuoteReviewBox } from '../components/project/Ai
 import { PhaseGuideView } from '../components/project/PhaseGuideView'
 import { VideoShelf } from '../components/project/VideoShelf'
 import { RiskNotice } from '../components/RiskNotice'
+import { STATUS_ICON, STATUS_LABEL, STATUSES, siteNames } from '../lib/jobs'
+import type { QuoteStatus } from '../domain/types'
 import { PhotoDrop } from '../components/PhotoDrop'
 import { CalcList, MaterialsTable, Notes, QuoteBox, SlopeCard } from '../components/project/Readout'
 import { useProjectPhotos } from '../components/project/usePhotos'
@@ -181,6 +183,40 @@ export function ProjectPage() {
               <i style={{ width: `${pct}%` }} />
             </div>
           </div>
+        </div>
+        <div className="proj-meta no-print">
+          <label className="field">
+            <span className="field-label">Stato del preventivo</span>
+            <select
+              value={project.status ?? 'bozza'}
+              onChange={(event) => void saveProject({ ...project, status: event.target.value as QuoteStatus, updatedAt: new Date().toISOString() })}
+            >
+              {STATUSES.map((status) => (
+                <option key={status} value={status}>
+                  {STATUS_ICON[status]} {STATUS_LABEL[status]}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="field">
+            <span className="field-label">Cantiere / cliente</span>
+            <input
+              key={project.siteName ?? ''}
+              list="site-names"
+              defaultValue={project.siteName ?? ''}
+              placeholder="es. Casa Rossi (raggruppa più lavori)"
+              maxLength={80}
+              onBlur={(event) => {
+                const value = event.target.value.trim()
+                if (value !== (project.siteName ?? '')) void saveProject({ ...project, siteName: value, updatedAt: new Date().toISOString() })
+              }}
+            />
+            <datalist id="site-names">
+              {siteNames(projects).map((name) => (
+                <option key={name} value={name} />
+              ))}
+            </datalist>
+          </label>
         </div>
         <RiskNotice trade={project.trade} />
         <div className="proj-actions no-print">

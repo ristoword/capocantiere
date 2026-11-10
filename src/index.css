@@ -438,3 +438,13 @@ td small { display: block; margin-top: 0.2rem; }
 .price-row { display: flex; justify-content: space-between; align-items: center; gap: 0.6rem; font-size: 0.92rem; }
 .price-row input { width: 5.5rem; padding: 0.35rem 0.5rem; border: 1px solid var(--line); border-radius: 8px; text-align: right; }
 .price-row input.changed { border-color: var(--brand); background: var(--brand-soft); }
+
+/* Stati, filtri, cantieri */
+.filters { display: grid; gap: 0.6rem; margin-bottom: 1rem; }
+.chips { display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center; }
+.chip.on { background: var(--grad); color: #fff; border-color: transparent; }
+.proj-meta { display: grid; gap: 0.8rem; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); margin: 0.8rem 0; }
+.proj-meta select, .proj-meta input { padding: 0.55rem 0.7rem; border: 1px solid var(--line); border-radius: 10px; background: #fff; }
+.before-after { display: grid; grid-template-columns: 1fr 1fr; gap: 0.8rem; }
+.before-after img { width: 100%; max-height: 320px; object-fit: cover; border-radius: 12px; }
+@media (max-width: 560px) { .before-after { grid-template-columns: 1fr; } }

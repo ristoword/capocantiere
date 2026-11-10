@@ -28,7 +28,7 @@ function readBody(req) {
   })
 }
 
-export function createAiMiddleware(env) {
+export function createAiMiddleware(env, hooks = {}) {
   const key = String(env.OPENAI_API_KEY || '').trim()
   const model = String(env.OPENAI_MODEL || '').trim() || 'gpt-4o-mini'
   const imageModel = String(env.OPENAI_IMAGE_MODEL || '').trim() || 'gpt-image-1-mini'
@@ -59,6 +59,7 @@ export function createAiMiddleware(env) {
           body: JSON.stringify({ model: imageModel, prompt, size: '1024x1024', quality: 'low', n: 1 }),
         })
         const text = await upstream.text()
+        if (upstream.ok) hooks.onUsage?.(req, { kind: 'image', model: imageModel, tokensIn: 0, tokensOut: 0 })
         res.statusCode = upstream.status
         res.setHeader('Content-Type', 'application/json; charset=utf-8')
         return res.end(text.split(key).join('***'))
@@ -86,6 +87,14 @@ export function createAiMiddleware(env) {
         body: JSON.stringify(payload),
       })
       const text = await upstream.text()
+      if (upstream.ok) {
+        try {
+          const usage = JSON.parse(text).usage ?? {}
+          hooks.onUsage?.(req, { kind: 'chat', model, tokensIn: Number(usage.prompt_tokens) || 0, tokensOut: Number(usage.completion_tokens) || 0 })
+        } catch {
+          /* risposta senza uso: non si registra */
+        }
+      }
       res.statusCode = upstream.status
       res.setHeader('Content-Type', 'application/json; charset=utf-8')
       res.end(text.split(key).join('***'))

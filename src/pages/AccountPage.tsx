@@ -2,7 +2,7 @@ import { useRef, useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 import { EMPTY_PROFILE, useAccount, type BusinessProfile } from '../context/Account'
 import { useAuth } from '../context/Auth'
-import { defaultLaborRate, defaultMaterialPrice, LABOR_LABELS, MATERIAL_LABELS, type PriceMap } from '../domain/priceBook'
+import { defaultLaborRate, defaultMaterialPrice, LABOR_LABELS, MATERIAL_LABELS, parsePriceCsv, priceCsvTemplate, type PriceMap } from '../domain/priceBook'
 import { api } from '../lib/http'
 
 async function logoToDataUrl(file: File): Promise<string> {
@@ -23,6 +23,7 @@ export function AccountPage() {
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
   const logoRef = useRef<HTMLInputElement>(null)
+  const csvRef = useRef<HTMLInputElement>(null)
 
   const say = (ok: boolean, text: string) => setMsg({ ok, text })
   const fail = (reason: unknown) => say(false, reason instanceof Error ? reason.message : 'Operazione non riuscita.')
@@ -47,6 +48,27 @@ export function AccountPage() {
     } catch (reason) {
       fail(reason)
     }
+  }
+
+  async function importCsv(file: File) {
+    const { prices: found, unknown, invalid } = parsePriceCsv(await file.text())
+    const count = Object.keys(found).length
+    if (count === 0) {
+      say(false, 'Nessun prezzo riconosciuto. Scarica il modello CSV e compilalo (nome;prezzo).')
+      return
+    }
+    setDraft((current) => ({ ...current, ...found }))
+    const notes = [unknown.length ? `${unknown.length} nomi non riconosciuti (${unknown.slice(0, 3).join(', ')}…)` : '', invalid.length ? `${invalid.length} prezzi non validi` : ''].filter(Boolean)
+    say(true, `✅ Letti ${count} prezzi dal file${notes.length ? ` — ${notes.join('; ')}` : ''}. Controlla e premi «Salva listino».`)
+  }
+
+  function downloadCsvTemplate() {
+    const blob = new Blob(['﻿' + priceCsvTemplate(draft)], { type: 'text/csv;charset=utf-8' })
+    const link = document.createElement('a')
+    link.href = URL.createObjectURL(blob)
+    link.download = 'listino-capocantiere.csv'
+    link.click()
+    URL.revokeObjectURL(link.href)
   }
 
   async function downloadBackup() {
@@ -293,6 +315,23 @@ export function AccountPage() {
           </button>
           <button type="button" className="btn ghost" onClick={() => setDraft({})}>
             Ripristina i valori indicativi
+          </button>
+          <button type="button" className="btn" onClick={downloadCsvTemplate}>
+            ⬇️ Modello CSV
+          </button>
+          <input
+            ref={csvRef}
+            type="file"
+            accept=".csv,text/csv,text/plain"
+            hidden
+            onChange={(e) => {
+              const file = e.target.files?.[0]
+              if (file) void importCsv(file)
+              e.target.value = ''
+            }}
+          />
+          <button type="button" className="btn" onClick={() => csvRef.current?.click()}>
+            ⬆️ Importa listino CSV
           </button>
         </div>
       </section>

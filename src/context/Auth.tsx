@@ -1,5 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
-import { api, UNAUTH_EVENT } from '../lib/http'
+import { api, ApiError, UNAUTH_EVENT } from '../lib/http'
+
+const USER_CACHE = 'capocantiere-last-user'
 
 export interface User {
   id: string
@@ -32,8 +34,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const me = await api<{ user: User | null; signup: SignupMode }>('/api/auth/me')
       setUser(me.user)
       setSignup(me.signup)
-    } catch {
-      setUser(null)
+      try {
+        if (me.user) localStorage.setItem(USER_CACHE, JSON.stringify(me.user))
+        else localStorage.removeItem(USER_CACHE)
+      } catch {
+        /* archivio non disponibile */
+      }
+    } catch (error) {
+      // Senza rete si riapre l'app con l'ultimo utente collegato: i dati sono la copia locale.
+      let cached: User | null = null
+      if (error instanceof ApiError && error.status === 0) {
+        try {
+          cached = JSON.parse(localStorage.getItem(USER_CACHE) ?? 'null') as User | null
+        } catch {
+          cached = null
+        }
+      }
+      setUser(cached)
     } finally {
       setLoading(false)
     }
@@ -58,6 +75,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const logout = useCallback(async () => {
     await api('/api/auth/logout', { method: 'POST' }).catch(() => undefined)
+    try {
+      localStorage.removeItem(USER_CACHE)
+      localStorage.removeItem('capocantiere-account-cache')
+      for (const key of Object.keys(localStorage)) if (key.startsWith('capocantiere-cache-')) localStorage.removeItem(key)
+    } catch {
+      /* niente */
+    }
     setUser(null)
   }, [])
 

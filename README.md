@@ -83,6 +83,12 @@ Nelle fasi e nella chat l'app cerca video **reali** su YouTube (titolo, canale, 
 - **Backup**: Account → *Scarica backup* / *Ripristina da file*. Cancellazione account e dati dalla stessa pagina.
 - I lavori salvati in precedenza nel browser (IndexedDB) vengono caricati sul tuo account al primo accesso.
 - **Preventivo cliente**: intestazione con i dati dell'attività e logo, numerazione AAAA-NNN, IVA, validità, PDF (stampa), invio WhatsApp/email. **Listino**: prezzi e tariffe modificabili per account.
+- **Stati e cantieri**: ogni preventivo ha uno stato (bozza, inviato, accettato, rifiutato, concluso) e può appartenere a un cantiere/cliente; dalla dashboard filtri per stato e cantiere e un preventivo unico per cantiere.
+- **Amministrazione** (solo amministratore): utenti, spesa AI stimata (token × prezzo del modello), budget mensile (`MONTHLY_BUDGET_USD`), link di reset password e download del database.
+- **Recupero password**: link monouso valido 1 ora, via email (Resend, `RESEND_API_KEY`) oppure generato dall'amministratore.
+- **Backup automatico** del database ogni 12 ore (ultime 7 copie in `DATA_DIR/backups`).
+- **Offline**: le modifiche ai lavori fatte senza rete restano in coda sul dispositivo e partono da sole al ritorno della connessione; foto comprese. Servono almeno un accesso online precedente.
+- **Listino**: modello CSV scaricabile e importabile (nome;prezzo).
 - Pubblicazione negli store: vedi [STORE.md](STORE.md).
 
 ## Sviluppo

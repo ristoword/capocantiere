@@ -167,7 +167,13 @@ export interface Project {
   /** Cliente e dati del preventivo formale. */
   client?: ClientInfo
   quoteMeta?: QuoteMeta
+  /** Stato commerciale del preventivo. */
+  status?: QuoteStatus
+  /** Cantiere o cliente a cui appartiene il lavoro (raggruppa più lavori). */
+  siteName?: string
 }
+
+export type QuoteStatus = 'bozza' | 'inviato' | 'accettato' | 'rifiutato' | 'concluso'
 
 export interface ClientInfo {
   name: string

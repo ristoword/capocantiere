@@ -82,6 +82,7 @@ export function Assistant({ project, onSave }: { project: Project; onSave: (chat
     phase ? `Spiegami la fase «${phase.title}»` : 'Cosa manca per finire?',
     'Che errori devo evitare?',
     'Posso risparmiare sui materiali?',
+    'Stima le misure dalla foto che allego (usa un oggetto di riferimento)',
   ]
 
   return (

@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import type { Project, StoredPhoto } from '../domain/types'
-import { deleteProjectCascade, listPhotos, listProjects, putPhoto, putProject } from '../storage/db'
+import { configureStorage, deleteProjectCascade, flushQueue, listPhotos, listProjects, pendingChanges, putPhoto, putProject, SYNC_EVENT } from '../storage/db'
 import { listPhotos as localPhotos, listProjects as localProjects } from '../storage/localdb'
 import { shrink } from '../lib/image'
 import { useAuth } from './Auth'
@@ -28,6 +28,9 @@ async function migrateLocal(userId: string, remote: Project[]): Promise<boolean>
 
 interface StoreValue {
   ready: boolean
+  /** Modifiche fatte senza rete, in attesa di essere inviate. */
+  pending: number
+  online: boolean
   error: string | null
   projects: Project[]
   saveProject: (project: Project) => Promise<void>
@@ -45,6 +48,29 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
 
   const { user } = useAuth()
   const userId = user?.id
+  if (userId) configureStorage(userId)
+  const [pending, setPending] = useState(() => (userId ? pendingChanges() : 0))
+  const [online, setOnline] = useState(() => navigator.onLine)
+
+  useEffect(() => {
+    const sync = () => setPending(pendingChanges())
+    const up = () => {
+      setOnline(true)
+      void flushQueue()
+        .then(() => listProjects())
+        .then((rows) => setProjects(rows))
+        .catch(() => undefined)
+    }
+    const down = () => setOnline(false)
+    window.addEventListener(SYNC_EVENT, sync)
+    window.addEventListener('online', up)
+    window.addEventListener('offline', down)
+    return () => {
+      window.removeEventListener(SYNC_EVENT, sync)
+      window.removeEventListener('online', up)
+      window.removeEventListener('offline', down)
+    }
+  }, [])
 
   useEffect(() => {
     if (!userId) return
@@ -90,8 +116,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const photosFor = useCallback((projectId: string) => listPhotos(projectId), [])
 
   const value = useMemo(
-    () => ({ ready, error, projects, saveProject, removeProject, addPhoto, photosFor }),
-    [ready, error, projects, saveProject, removeProject, addPhoto, photosFor],
+    () => ({ ready, pending, online, error, projects, saveProject, removeProject, addPhoto, photosFor }),
+    [ready, pending, online, error, projects, saveProject, removeProject, addPhoto, photosFor],
   )
 
   return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>

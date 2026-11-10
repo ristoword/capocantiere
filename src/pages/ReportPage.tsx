@@ -100,6 +100,29 @@ export function ReportPage() {
         <p>{project.tools.join(' · ')}</p>
       </section>
 
+      {(() => {
+        const before = photos.find((photo) => !photo.phaseId)
+        const after = [...photos].reverse().find((photo) => photo.phaseId)
+        if (!before || !after) return null
+        return (
+          <section>
+            <h2>Prima e dopo</h2>
+            <div className="photo-row before-after">
+              <figure>
+                <img src={before.url} alt="Prima" />
+                <figcaption>Prima · {before.name}</figcaption>
+              </figure>
+              <figure>
+                <img src={after.url} alt="Dopo" />
+                <figcaption>
+                  Dopo · {project.phases.find((phase) => phase.id === after.phaseId)?.title ?? after.name}
+                </figcaption>
+              </figure>
+            </div>
+          </section>
+        )
+      })()}
+
       {photos.length > 0 ? (
         <section>
           <h2>Foto</h2>
