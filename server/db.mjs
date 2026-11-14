@@ -67,6 +67,14 @@ const MIGRATIONS = [
     expires_at INTEGER NOT NULL
   );
   `,
+  // Prova gratuita e abbonamento. Chi esiste già riceve 7 giorni di prova dal momento dell'aggiornamento.
+  `
+  ALTER TABLE users ADD COLUMN trial_ends INTEGER NOT NULL DEFAULT 0;
+  ALTER TABLE users ADD COLUMN sub_until INTEGER NOT NULL DEFAULT 0;
+  ALTER TABLE users ADD COLUMN sub_source TEXT NOT NULL DEFAULT '';
+  ALTER TABLE users ADD COLUMN stripe_customer TEXT NOT NULL DEFAULT '';
+  UPDATE users SET trial_ends = (CAST(strftime('%s','now') AS INTEGER) + 7 * 86400) * 1000;
+  `,
 ]
 
 export function openDatabase(file) {

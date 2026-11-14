@@ -84,6 +84,17 @@ function serveStatic(req, res) {
   }
   if (clean.includes('\0')) return plain(res, 400, 'Indirizzo non valido')
   if (clean.startsWith('/api/')) return plain(res, 404, 'Non trovato')
+  if (clean === '/.well-known/assetlinks.json') {
+    // Collega il sito all'app Android (Trusted Web Activity). Si genera solo con pacchetto e impronta reali, mai segnaposto.
+    const pkg = String(process.env.ANDROID_PACKAGE || '').trim()
+    const prints = String(process.env.ANDROID_SHA256 || '').split(',').map((item) => item.trim().toUpperCase()).filter((item) => /^([0-9A-F]{2}:){31}[0-9A-F]{2}$/.test(item))
+    if (!/^[A-Za-z][A-Za-z0-9_]*(\.[A-Za-z][A-Za-z0-9_]*)+$/.test(pkg) || prints.length === 0) return plain(res, 404, 'Non trovato')
+    res.statusCode = 200
+    res.setHeader('Content-Type', 'application/json; charset=utf-8')
+    res.setHeader('Cache-Control', 'no-cache')
+    return res.end(JSON.stringify([{ relation: ['delegate_permission/common.handle_all_urls'], target: { namespace: 'android_app', package_name: pkg, sha256_cert_fingerprints: prints } }]))
+  }
+  if (clean.startsWith('/.well-known/')) return plain(res, 404, 'Non trovato')
   let file = path.join(dist, clean)
   const inside = file === dist || file.startsWith(dist + path.sep)
   if (!inside || !fs.existsSync(file) || fs.statSync(file).isDirectory()) file = path.join(dist, 'index.html')

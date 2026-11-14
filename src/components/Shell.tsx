@@ -1,8 +1,11 @@
 import { useEffect, useState } from 'react'
 import { Link, NavLink, Outlet, useLocation } from 'react-router-dom'
-import { useAuth } from '../context/Auth'
+import { planOf, useAuth } from '../context/Auth'
 import { useStore } from '../context/Store'
+import { useT } from '../lib/i18n'
+import { daysLeft } from '../lib/plan'
 import { hasApiKey } from '../storage/settings'
+import { LangSwitch } from './LangSwitch'
 
 function useAiReady(): boolean | null {
   const [ready, setReady] = useState<boolean | null>(hasApiKey() ? true : null)
@@ -16,21 +19,24 @@ function useAiReady(): boolean | null {
   return ready
 }
 
-const LINKS = [
-  { to: '/', label: 'Dashboard', ico: '🏠', end: true },
-  { to: '/nuovo', label: 'Nuovo lavoro', ico: '➕', end: false },
-  { to: '/account', label: 'Account e listino', ico: '👤', end: false },
-  { to: '/impostazioni', label: 'Chiave AI', ico: '⚙️', end: false },
-]
-
 export function Shell() {
   const { error, pending, online, problem, dismissProblem } = useStore()
   const { user } = useAuth()
+  const t = useT()
   const { pathname } = useLocation()
   useEffect(() => {
     window.scrollTo(0, 0)
   }, [pathname])
   const ai = useAiReady()
+  const plan = planOf(user)
+  const links = [
+    { to: '/', label: t('nav.home'), ico: '🏠', end: true },
+    { to: '/nuovo', label: t('nav.new'), ico: '➕', end: false },
+    { to: '/archivio', label: t('nav.archive'), ico: '🗂️', end: false },
+    { to: '/account', label: t('nav.account'), ico: '👤', end: false },
+    { to: '/impostazioni', label: t('nav.key'), ico: '⚙️', end: false },
+    ...(user?.isAdmin ? [{ to: '/admin', label: t('nav.admin'), ico: '🛡️', end: false }] : []),
+  ]
   return (
     <div className="app">
       <aside className="sidebar no-print">
@@ -38,11 +44,11 @@ export function Shell() {
           <span className="brand-mark">🛠️</span>
           <span>
             <strong>Capocantiere</strong>
-            <em>Il tuo assistente di cantiere</em>
+            <em>{t('brand.tagline')}</em>
           </span>
         </Link>
-        <nav className="nav" aria-label="Menu principale">
-          {[...LINKS, ...(user?.isAdmin ? [{ to: '/admin', label: 'Amministrazione', ico: '🛡️', end: false }] : [])].map((item) => (
+        <nav className="nav" aria-label="Menu">
+          {links.map((item) => (
             <NavLink key={item.to} to={item.to} end={item.end}>
               <span className="ico">{item.ico}</span>
               {item.label}
@@ -50,11 +56,12 @@ export function Shell() {
           ))}
         </nav>
         <Link to="/nuovo" className="btn solid side-cta">
-          📷 Parti da una foto
+          {t('shell.cta')}
         </Link>
         <div className="side-foot">
-          <span className={ai ? 'ai-pill on' : 'ai-pill off'}>{ai ? 'Assistente AI attivo' : 'AI non configurata'}</span>
-          <p>Prezzi e quantità sono indicativi: verifica sempre la scheda tecnica del prodotto.</p>
+          <LangSwitch compact />
+          <span className={ai ? 'ai-pill on' : 'ai-pill off'}>{ai ? t('shell.aiOn') : t('shell.aiOff')}</span>
+          <p>{t('shell.disclaimer')}</p>
         </div>
       </aside>
       <div className="main">
@@ -63,19 +70,36 @@ export function Shell() {
             <span className="brand-mark">🛠️</span>
             <strong>Capocantiere</strong>
           </Link>
-          <span className={ai ? 'ai-pill on' : 'ai-pill off'}>{ai ? 'AI attiva' : 'AI off'}</span>
+          <LangSwitch compact />
+          <span className={ai ? 'ai-pill on' : 'ai-pill off'}>{ai ? t('shell.aiOnShort') : t('shell.aiOffShort')}</span>
         </header>
+        {plan.status === 'trial' ? (
+          <p className="banner no-print" role="status">
+            {daysLeft(plan.until) <= 1 ? t('plan.trialLeft1') : t('plan.trialLeft', { days: daysLeft(plan.until) })}{' '}
+            <Link className="btn sm" to="/abbonamento">
+              {t('plan.subscribe')}
+            </Link>
+          </p>
+        ) : null}
+        {plan.status === 'expired' ? (
+          <p className="banner warn no-print" role="alert">
+            {t('plan.expiredBanner')}{' '}
+            <Link className="btn sm solid" to="/abbonamento">
+              {t('plan.subscribe')}
+            </Link>
+          </p>
+        ) : null}
         {!online || pending > 0 ? (
           <p className="banner warn no-print" role="status">
-            {!online ? '📴 Sei offline: puoi continuare a lavorare, le modifiche si inviano da sole quando torna la rete.' : '🔄 Sincronizzo le modifiche fatte offline…'}
-            {pending > 0 ? ` (${pending} in attesa)` : ''}
+            {!online ? t('shell.offline') : t('shell.syncing')}
+            {pending > 0 ? ` ${t('shell.pending', { n: pending })}` : ''}
           </p>
         ) : null}
         {problem ? (
           <p className="banner err no-print" role="alert">
             {problem}{' '}
             <button type="button" className="btn sm" onClick={dismissProblem}>
-              Ho capito
+              {t('shell.ok')}
             </button>
           </p>
         ) : null}
@@ -85,13 +109,20 @@ export function Shell() {
         </main>
         <nav className="bottom-nav no-print" aria-label="Menu">
           <NavLink to="/" end>
-            <span className="ico">🏠</span>Home
+            <span className="ico">🏠</span>
+            {t('nav.homeShort')}
+          </NavLink>
+          <NavLink to="/archivio">
+            <span className="ico">🗂️</span>
+            {t('nav.archive')}
           </NavLink>
           <NavLink to="/nuovo" className="plus">
-            <span className="ico">＋</span>Nuovo
+            <span className="ico">＋</span>
+            {t('nav.newShort')}
           </NavLink>
           <NavLink to="/account">
-            <span className="ico">👤</span>Account
+            <span className="ico">👤</span>
+            {t('nav.accountShort')}
           </NavLink>
         </nav>
       </div>

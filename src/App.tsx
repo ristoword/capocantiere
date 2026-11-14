@@ -15,6 +15,10 @@ import { ResetPage } from './pages/ResetPage'
 import { SitePage } from './pages/SitePage'
 import { ReportPage } from './pages/ReportPage'
 import { SettingsPage } from './pages/SettingsPage'
+import { ArchivePage } from './pages/ArchivePage'
+import { PaywallPage } from './pages/PaywallPage'
+import { isExpired } from './lib/plan'
+import { useT } from './lib/i18n'
 
 function Missing() {
   return (
@@ -39,18 +43,23 @@ function OldCalc() {
 
 function Gate() {
   const { user, loading } = useAuth()
-  if (loading) return <div className="splash">Caricamento…</div>
+  const t = useT()
+  if (loading) return <div className="splash">{t('common.loading')}</div>
   if (!user) return <LoginPage />
+  // Prova finita: lavori e preventivi restano consultabili ed esportabili, ma non si creano lavori né si usa l'AI.
+  const locked = (element: React.ReactElement) => (isExpired(user) ? <Navigate to="/abbonamento" replace /> : element)
   return (
     <StoreProvider key={user.id}>
       <AccountProvider>
       <Routes>
         <Route element={<Shell />}>
             <Route path="/" element={<HomePage />} />
-            <Route path="/nuovo" element={<JobBuilderPage />} />
-            <Route path="/mestiere/:tradeId" element={<JobBuilderPage />} />
+            <Route path="/nuovo" element={locked(<JobBuilderPage />)} />
+            <Route path="/mestiere/:tradeId" element={locked(<JobBuilderPage />)} />
             <Route path="/calcola" element={<OldCalc />} />
             <Route path="/impostazioni" element={<SettingsPage />} />
+            <Route path="/archivio" element={<ArchivePage />} />
+            <Route path="/abbonamento" element={<PaywallPage />} />
             <Route path="/progetto/:id" element={<ProjectPage />} />
             <Route path="/progetto/:id/report" element={<ReportPage />} />
             <Route path="/progetto/:id/preventivo" element={<QuotePage />} />

@@ -8,6 +8,8 @@ export class ApiError extends Error {
 }
 
 export const UNAUTH_EVENT = 'capocantiere-unauthorized'
+/** Il server risponde 402: prova finita, serve l'abbonamento. L'app aggiorna lo stato e mostra la schermata di sblocco. */
+export const PAYWALL_EVENT = 'capocantiere-paywall'
 
 export async function api<T = unknown>(path: string, init: { method?: string; body?: unknown; raw?: BodyInit; headers?: Record<string, string> } = {}): Promise<T> {
   let response: Response
@@ -26,6 +28,7 @@ export async function api<T = unknown>(path: string, init: { method?: string; bo
     throw new ApiError('Server non raggiungibile: controlla la connessione.', 0)
   }
   if (response.status === 401 && !path.startsWith('/api/auth/')) window.dispatchEvent(new Event(UNAUTH_EVENT))
+  if (response.status === 402) window.dispatchEvent(new Event(PAYWALL_EVENT))
   const type = response.headers.get('content-type') ?? ''
   const payload: unknown = type.includes('json') ? await response.json().catch(() => null) : null
   if (!response.ok) {

@@ -1,14 +1,22 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
-import { api, ApiError, UNAUTH_EVENT } from '../lib/http'
+import { api, ApiError, PAYWALL_EVENT, UNAUTH_EVENT } from '../lib/http'
 
 const USER_CACHE = 'capocantiere-last-user'
+
+export type PlanStatus = 'trial' | 'active' | 'expired' | 'unlimited'
 
 export interface User {
   id: string
   email: string
   name: string
   isAdmin: boolean
+  /** Prova gratuita / abbonamento. `until` è in millisecondi. */
+  plan: { status: PlanStatus; until?: number }
+  billing: { enabled: boolean; manageable: boolean }
 }
+
+/** Stato di accesso di un utente salvato prima dell'introduzione degli abbonamenti (cache vecchia): nessun blocco lato app. */
+export const planOf = (user: User | null) => user?.plan ?? { status: 'unlimited' as PlanStatus }
 
 export type SignupMode = 'open' | 'invite' | 'closed'
 
@@ -59,8 +67,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     void refresh()
     const onUnauth = () => setUser(null)
+    const onPaywall = () => void refresh() // il server dice che la prova è finita: si rilegge lo stato e compare lo sblocco
     window.addEventListener(UNAUTH_EVENT, onUnauth)
-    return () => window.removeEventListener(UNAUTH_EVENT, onUnauth)
+    window.addEventListener(PAYWALL_EVENT, onPaywall)
+    return () => {
+      window.removeEventListener(UNAUTH_EVENT, onUnauth)
+      window.removeEventListener(PAYWALL_EVENT, onPaywall)
+    }
   }, [refresh])
 
   const login = useCallback(async (email: string, password: string) => {

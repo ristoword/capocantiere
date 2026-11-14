@@ -77,9 +77,12 @@ describe('persistenza dei dati', () => {
     db.prepare("INSERT INTO users (id, email, name, pass_hash, created_at) VALUES ('u', 'a@b.it', '', 'x', 'n')").run()
     db.exec('PRAGMA user_version = 1') // come un database creato dalla prima versione
     db.exec('DROP TABLE spend; DROP TABLE reset_tokens;')
+    for (const column of ['trial_ends', 'sub_until', 'sub_source', 'stripe_customer']) db.exec(`ALTER TABLE users DROP COLUMN ${column}`)
     db.close()
     const upgraded = openDatabase(file)
-    expect(Number(upgraded.prepare('PRAGMA user_version').get().user_version)).toBeGreaterThanOrEqual(2)
+    expect(Number(upgraded.prepare('PRAGMA user_version').get().user_version)).toBeGreaterThanOrEqual(3)
+    // Chi esisteva già riceve la prova gratuita dal momento dell'aggiornamento.
+    expect(Number(upgraded.prepare('SELECT trial_ends FROM users').get().trial_ends)).toBeGreaterThan(Date.now())
     expect(upgraded.prepare('SELECT email FROM users').get().email).toBe('a@b.it')
     expect(upgraded.prepare("SELECT name FROM sqlite_master WHERE name = 'spend'").get()).toBeTruthy()
     upgraded.close()

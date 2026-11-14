@@ -49,9 +49,9 @@ function writeCache(key: string, value: unknown): void {
 
 const notify = () => window.dispatchEvent(new Event(SYNC_EVENT))
 const isOffline = (error: unknown) => error instanceof ApiError && error.status === 0
-/** Errori definitivi del server (dati rifiutati): riprovare non servirebbe. 401, 408 e 429 si riprovano. */
+/** Errori definitivi del server (dati rifiutati): riprovare non servirebbe. 401, 402 (abbonamento scaduto), 408 e 429 si riprovano: le modifiche non si perdono. */
 const isPermanent = (error: unknown) =>
-  error instanceof ApiError && error.status >= 400 && error.status < 500 && ![401, 408, 429].includes(error.status)
+  error instanceof ApiError && error.status >= 400 && error.status < 500 && ![401, 402, 408, 429].includes(error.status)
 
 /** Indica a chi appartengono i dati in copia locale (si chiama all'accesso). */
 export function configureStorage(userId: string): void {

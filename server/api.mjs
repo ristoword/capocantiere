@@ -6,6 +6,7 @@ import { openDatabase } from './db.mjs'
 import { clientIp, createLimiter, fail, parseCookies, readJson, readRaw, send } from './http.mjs'
 import { createAiMiddleware } from './aiProxy.mjs'
 import { listBackups, makeBackup } from './backup.mjs'
+import { billingConfigured, createCheckout, createPortal, interpretEvent, verifyWebhook } from './billing.mjs'
 
 const COOKIE = 'cc_session'
 const SESSION_DAYS = 30
@@ -86,6 +87,18 @@ export function createApi(env, options = {}) {
   const unlimited = new Set(String(env.UNLIMITED_EMAILS || '').split(',').map((e) => e.trim().toLowerCase()).filter(Boolean))
   const isUnlimited = (user) => unlimited.has(String(user.email || '').toLowerCase())
   const storageLimitFor = (user) => (isUnlimited(user) ? Number.MAX_SAFE_INTEGER / 2 : storageLimit)
+  // Prova gratuita (TRIAL_DAYS, default 7) poi abbonamento. SUBSCRIPTIONS=off disattiva il blocco.
+  const trialDays = num(env.TRIAL_DAYS, 7)
+  const paywallOn = String(env.SUBSCRIPTIONS || 'on').toLowerCase() !== 'off'
+  function planOf(user) {
+    if (!paywallOn || user.is_admin === 1 || isUnlimited(user)) return { status: 'unlimited' }
+    const now = Date.now()
+    if (user.sub_until > now) return { status: 'active', until: user.sub_until }
+    if (user.trial_ends > now) return { status: 'trial', until: user.trial_ends }
+    return { status: 'expired', until: Math.max(user.sub_until, user.trial_ends) }
+  }
+  const payRequired = (res) =>
+    send(res, 402, { error: { message: 'La prova gratuita è finita. Attiva l’abbonamento per continuare a creare lavori e usare l’assistente.', code: 'subscription_required' } })
   const mailReady = Boolean((env.RESEND_API_KEY || options.sendMail) && env.APP_URL)
   const inflight = new Map()
   const nowIso = () => new Date().toISOString()
@@ -95,7 +108,10 @@ export function createApi(env, options = {}) {
     userCount: db.prepare('SELECT COUNT(*) AS n FROM users'),
     userByEmail: db.prepare('SELECT * FROM users WHERE email = ?'),
     userById: db.prepare('SELECT * FROM users WHERE id = ?'),
-    insertUser: db.prepare('INSERT INTO users (id, email, name, pass_hash, is_admin, created_at) VALUES (?, ?, ?, ?, ?, ?)'),
+    insertUser: db.prepare('INSERT INTO users (id, email, name, pass_hash, is_admin, created_at, trial_ends) VALUES (?, ?, ?, ?, ?, ?, ?)'),
+    setSub: db.prepare('UPDATE users SET sub_until = ?, sub_source = ? WHERE id = ?'),
+    setCustomer: db.prepare('UPDATE users SET stripe_customer = ? WHERE id = ?'),
+    userByCustomer: db.prepare("SELECT * FROM users WHERE stripe_customer = ? AND stripe_customer != ''"),
     setPassword: db.prepare('UPDATE users SET pass_hash = ? WHERE id = ?'),
     deleteUser: db.prepare('DELETE FROM users WHERE id = ?'),
     insertSession: db.prepare('INSERT INTO sessions (token_hash, user_id, created_at, expires_at) VALUES (?, ?, ?, ?)'),
@@ -148,7 +164,14 @@ export function createApi(env, options = {}) {
     ),
   }
 
-  const publicUser = (user) => ({ id: user.id, email: user.email, name: user.name, isAdmin: user.is_admin === 1 })
+  const publicUser = (user) => ({
+    id: user.id,
+    email: user.email,
+    name: user.name,
+    isAdmin: user.is_admin === 1,
+    plan: planOf(user),
+    billing: { enabled: billingConfigured(env), manageable: Boolean(user.stripe_customer) && billingConfigured(env) },
+  })
 
   function makeResetToken(userId) {
     const token = crypto.randomBytes(24).toString('base64url')
@@ -222,7 +245,7 @@ export function createApi(env, options = {}) {
       if (q.userByEmail.get(email)) return fail(res, 409, 'Esiste già un account con questa email.')
       const id = crypto.randomUUID()
       const first = q.userCount.get().n === 0
-      q.insertUser.run(id, email, name, await hashPassword(password), first ? 1 : 0, nowIso())
+      q.insertUser.run(id, email, name, await hashPassword(password), first ? 1 : 0, nowIso(), Date.now() + trialDays * 86400000)
       startSession(req, res, id)
       return send(res, 201, { user: publicUser(q.userById.get(id)) })
     }
@@ -327,6 +350,7 @@ export function createApi(env, options = {}) {
         return send(res, 200, { photos })
       }
       if (id && !sub && method === 'PUT') {
+        if (planOf(user).status === 'expired') return payRequired(res)
         const body = await readJson(req, 4 * MB)
         if (!projectsOk(body) || body.id !== id) return fail(res, 400, 'Fascicolo non valido')
         const json = JSON.stringify(body)
@@ -350,6 +374,7 @@ export function createApi(env, options = {}) {
         return res.end(Buffer.from(row.data))
       }
       if (method === 'PUT') {
+        if (planOf(user).status === 'expired') return payRequired(res)
         let meta
         try {
           meta = JSON.parse(decodeURIComponent(String(req.headers['x-photo-meta'] || '{}')))
@@ -398,6 +423,7 @@ export function createApi(env, options = {}) {
       })
     }
     if (kind === 'import' && method === 'POST') {
+      if (planOf(user).status === 'expired') return payRequired(res)
       const body = await readJson(req, 200 * MB)
       if (body?.app !== 'capocantiere' || !Array.isArray(body.projects)) return fail(res, 400, 'File di backup non riconosciuto.')
       let projects = 0
@@ -461,8 +487,55 @@ export function createApi(env, options = {}) {
     return fail(res, 404, 'Percorso non trovato')
   }
 
+  async function billing(req, res, user, route) {
+    if (req.method !== 'POST') return fail(res, 404, 'Percorso non trovato')
+    if (!billingConfigured(env)) return fail(res, 409, 'I pagamenti non sono ancora attivi su questo sito.')
+    if (route === 'checkout') {
+      if (planOf(user).status === 'unlimited') return fail(res, 409, 'Il tuo account non richiede un abbonamento.')
+      const session = await createCheckout(env, user)
+      return send(res, 200, { url: session.url })
+    }
+    if (route === 'portal') {
+      if (!user.stripe_customer) return fail(res, 409, 'Nessun abbonamento da gestire.')
+      const session = await createPortal(env, user)
+      return send(res, 200, { url: session.url })
+    }
+    return fail(res, 404, 'Percorso non trovato')
+  }
+
+  // Chiamato da Stripe: niente sessione né intestazione anti-CSRF, vale solo la firma sul corpo.
+  async function stripeWebhook(req, res) {
+    const raw = (await readRaw(req, 1 * MB)).toString('utf8')
+    if (!verifyWebhook(raw, req.headers['stripe-signature'], env.STRIPE_WEBHOOK_SECRET)) return fail(res, 400, 'Firma non valida')
+    let event
+    try {
+      event = JSON.parse(raw)
+    } catch {
+      return fail(res, 400, 'JSON non valido')
+    }
+    const action = interpretEvent(event)
+    if (action) {
+      const target = (action.userId && q.userById.get(action.userId)) || (action.customer && q.userByCustomer.get(action.customer)) || null
+      if (target) {
+        if (action.customer && target.stripe_customer !== action.customer) q.setCustomer.run(action.customer, target.id)
+        if (action.until !== null) q.setSub.run(action.until, 'stripe', target.id)
+      }
+    }
+    return send(res, 200, { received: true })
+  }
+
   async function admin(req, res, user, route) {
     if (!user.is_admin) return fail(res, 403, 'Solo per l’amministratore')
+    if (route === 'subscription' && req.method === 'POST') {
+      // Regalo o pagamento ricevuto fuori da Stripe: imposta i giorni di accesso a partire da adesso (0 = revoca).
+      const body = await readJson(req, 20000)
+      const target = q.userById.get(String(body.userId || ''))
+      if (!target) return fail(res, 404, 'Utente non trovato')
+      const days = Number(body.days)
+      if (!Number.isFinite(days) || days < 0 || days > 3650) return fail(res, 400, 'Giorni non validi (0–3650).')
+      q.setSub.run(days === 0 ? 0 : Date.now() + days * 86400000, days === 0 ? '' : 'manuale', target.id)
+      return send(res, 200, { ok: true, plan: planOf(q.userById.get(target.id)) })
+    }
     if (route === 'overview' && req.method === 'GET') {
       const since = monthStart()
       const days = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10)
@@ -472,6 +545,7 @@ export function createApi(env, options = {}) {
         name: row.name,
         isAdmin: row.is_admin === 1,
         createdAt: row.created_at,
+        plan: planOf(q.userById.get(row.id)).status,
         projects: row.projects,
         photoMb: Math.round((row.photo_bytes / MB) * 10) / 10,
         calls: row.calls,
@@ -522,6 +596,7 @@ export function createApi(env, options = {}) {
     const url = (req.url || '').split('?')[0]
     if (!url.startsWith('/api/')) return next()
     try {
+      if (url === '/api/billing/webhook' && req.method === 'POST') return await stripeWebhook(req, res)
       if (req.method !== 'GET' && req.method !== 'HEAD' && req.headers['x-requested-with'] !== 'capocantiere') {
         return fail(res, 403, 'Richiesta non consentita')
       }
@@ -534,6 +609,7 @@ export function createApi(env, options = {}) {
       if (Math.random() < 0.01) q.purgeSessions.run(Date.now())
       if (parts[0] === 'data') return await data(req, res, user, parts.slice(1))
       if (parts[0] === 'account') return await account(req, res, user, parts[1])
+      if (parts[0] === 'billing') return await billing(req, res, user, parts[1])
       if (parts[0] === 'admin') return await admin(req, res, user, parts[1])
       if (parts[0] === 'ai' || parts[0] === 'yt') {
         const kind = url === '/api/ai/image' ? 'image' : parts[0] === 'yt' ? 'video' : 'ai'
@@ -542,6 +618,7 @@ export function createApi(env, options = {}) {
           res.setHeader('Retry-After', String(burst.retryAfter))
           return fail(res, 429, 'Troppe richieste in poco tempo. Attendi un minuto.')
         }
+        if (planOf(user).status === 'expired') return payRequired(res)
         if (overBudget()) return fail(res, 503, 'Il budget mensile dell’AI è esaurito. Riprova il mese prossimo o chiedi all’amministratore.')
         if (!consume(user, kind)) {
           return fail(res, 429, 'Hai raggiunto il limite giornaliero per questa funzione. Riprova domani.')

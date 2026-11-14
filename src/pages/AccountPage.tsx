@@ -1,9 +1,17 @@
-import { useRef, useState, type FormEvent } from 'react'
-import { Link } from 'react-router-dom'
-import { EMPTY_PROFILE, useAccount, type BusinessProfile } from '../context/Account'
-import { useAuth } from '../context/Auth'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
+import { Link, useSearchParams } from 'react-router-dom'
+import { InstallApp } from '../components/InstallApp'
+import { LangSwitch } from '../components/LangSwitch'
+import { EMPTY_PROFILE, regionFor, useAccount, type BusinessProfile } from '../context/Account'
+import { planOf, useAuth } from '../context/Auth'
 import { defaultLaborRate, defaultMaterialPrice, LABOR_LABELS, MATERIAL_LABELS, parsePriceCsv, priceCsvTemplate, type PriceMap } from '../domain/priceBook'
+import { useStore } from '../context/Store'
+import { REGIONS, regionOf } from '../domain/regions'
+import { euro } from '../lib/format'
+import { statusOf } from '../lib/jobs'
 import { api } from '../lib/http'
+import { getLang, useT } from '../lib/i18n'
+import { daysLeft } from '../lib/plan'
 
 async function logoToDataUrl(file: File): Promise<string> {
   const bitmap = await createImageBitmap(file)
@@ -16,8 +24,13 @@ async function logoToDataUrl(file: File): Promise<string> {
 }
 
 export function AccountPage() {
-  const { user, logout } = useAuth()
+  const { user, logout, refresh } = useAuth()
+  const t = useT()
   const { profile, prices, saveProfile, savePrices } = useAccount()
+  const { projects } = useStore()
+  const [search, setSearch] = useSearchParams()
+  const plan = planOf(user)
+  const region = regionOf(regionFor(profile))
   const [form, setForm] = useState<BusinessProfile>({ ...EMPTY_PROFILE, ...profile })
   const [draft, setDraft] = useState<PriceMap>({ ...prices })
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null)
@@ -26,6 +39,28 @@ export function AccountPage() {
   const csvRef = useRef<HTMLInputElement>(null)
 
   const say = (ok: boolean, text: string) => setMsg({ ok, text })
+
+  // Ritorno dal pagamento: lo stato arriva dal webhook di Stripe, quindi si rilegge dal server.
+  useEffect(() => {
+    if (search.get('abbonamento') !== 'ok') return
+    setMsg({ ok: true, text: t('plan.thanks') })
+    void refresh()
+    const timer = window.setTimeout(() => void refresh(), 4000)
+    setSearch({}, { replace: true })
+    return () => window.clearTimeout(timer)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  async function changeRegion(code: string) {
+    const next = { ...form, country: code, vatPercent: regionOf(code).vat }
+    try {
+      await saveProfile(next)
+      setForm(next)
+      say(true, t('acc.regionSaved'))
+    } catch (reason) {
+      fail(reason)
+    }
+  }
   const fail = (reason: unknown) => say(false, reason instanceof Error ? reason.message : 'Operazione non riuscita.')
 
   async function submitProfile(event: FormEvent) {
@@ -143,11 +178,11 @@ export function AccountPage() {
 
   return (
     <div className="page">
-      <p className="kicker">Account</p>
+      <p className="kicker">{t('acc.title')}</p>
       <h1>{user?.name || user?.email}</h1>
       <p className="lede">
         {user?.email}
-        {user?.isAdmin ? ' · amministratore' : ''}
+        {user?.isAdmin ? t('acc.admin') : ''}
       </p>
       {msg ? (
         <p className={msg.ok ? 'banner' : 'banner err'} role="status">
@@ -155,10 +190,86 @@ export function AccountPage() {
         </p>
       ) : null}
 
+      <section className="card stack" style={{ marginBottom: '1rem' }}>
+        <h2>{t('plan.section')}</h2>
+        <p className={plan.status === 'expired' ? 'banner warn' : 'banner'} role="status">
+          {plan.status === 'active'
+            ? t('plan.active', { date: new Date(plan.until ?? 0).toLocaleDateString(getLang()) })
+            : plan.status === 'trial'
+              ? daysLeft(plan.until) <= 1
+                ? t('plan.trialLeft1')
+                : t('plan.trialLeft', { days: daysLeft(plan.until) })
+              : plan.status === 'unlimited'
+                ? t('plan.unlimited')
+                : t('plan.expired')}
+        </p>
+        {plan.status === 'unlimited' ? null : (
+          <div className="inline-actions">
+            <Link className="btn solid" to="/abbonamento">
+              {plan.status === 'active' ? t('plan.manage') : t('plan.subscribe')}
+            </Link>
+          </div>
+        )}
+      </section>
+
+      <InstallApp />
+
+      <section className="card stack" style={{ marginBottom: '1rem' }}>
+        <h2>🗂️ {t('arch.recent')}</h2>
+        {projects.length === 0 ? (
+          <p className="help">{t('arch.noJobs')}</p>
+        ) : (
+          <ul className="mini-archive">
+            {projects.slice(0, 5).map((project) => (
+              <li key={project.id}>
+                <Link to={`/progetto/${project.id}`}>{project.title}</Link>
+                <span>
+                  {project.quoteMeta?.number ? `${t('arch.number')} ${project.quoteMeta.number} · ` : ''}
+                  {t(`status.${statusOf(project)}`)}
+                </span>
+                <b>{euro(project.quote.totalEuro)}</b>
+              </li>
+            ))}
+          </ul>
+        )}
+        <div className="inline-actions">
+          <Link className="btn solid" to="/archivio">
+            {t('arch.openAll')}
+          </Link>
+        </div>
+      </section>
+
+      <section className="card stack" style={{ marginBottom: '1rem' }}>
+        <h2>{t('acc.region')}</h2>
+        <p className="help">{t('acc.regionHelp')}</p>
+        <div className="grid-form">
+          <label className="field">
+            <span className="field-label">{t('common.country')}</span>
+            <select value={region.code} onChange={(event) => void changeRegion(event.target.value)}>
+              {REGIONS.map((item) => (
+                <option key={item.code} value={item.code}>
+                  {item.flag} {item.names[getLang()]}
+                </option>
+              ))}
+            </select>
+          </label>
+          <LangSwitch />
+        </div>
+        <p className="help">{t('acc.regionSources', { updated: region.updated })}</p>
+        <details>
+          <summary className="help">{region.sources.length} · {region.names[getLang()]}</summary>
+          <ul className="help">
+            {region.sources.map((source) => (
+              <li key={source}>{source}</li>
+            ))}
+          </ul>
+        </details>
+      </section>
+
       <div className="account-grid">
         <form className="card stack" onSubmit={submitProfile}>
-          <h2>La tua attività</h2>
-          <p className="help">Compaiono nell’intestazione dei preventivi per i clienti.</p>
+          <h2>{t('acc.business')}</h2>
+          <p className="help">{t('acc.businessHelp')}</p>
           <label className="field">
             <span className="field-label">Ragione sociale / nome</span>
             <input value={form.businessName} onChange={(e) => set({ businessName: e.target.value })} maxLength={120} />
@@ -221,12 +332,12 @@ export function AccountPage() {
             ) : null}
           </div>
           <button type="submit" className="btn solid">
-            Salva dati attività
+            {t('acc.save')}
           </button>
         </form>
 
         <section className="card stack">
-          <h2>Backup dei tuoi dati</h2>
+          <h2>{t('acc.backup')}</h2>
           <p className="help">
             I lavori sono salvati sul server e restano anche se cambi dispositivo. Scarica comunque un backup ogni tanto: puoi ripristinarlo qui o su un altro account.
           </p>
@@ -266,10 +377,10 @@ export function AccountPage() {
           </form>
           <div className="inline-actions">
             <button type="button" className="btn" onClick={() => void logout()}>
-              Esci
+              {t('acc.logout')}
             </button>
             <button type="button" className="btn danger" onClick={() => void removeAccount()}>
-              Cancella account e dati
+              {t('acc.deleteAccount')}
             </button>
           </div>
           <p className="help">

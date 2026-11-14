@@ -1,11 +1,25 @@
 import { PRICE } from './pricing'
+import { regionBook, type RegionCode } from './regions'
 
 export type PriceMap = Record<string, number>
 
+// Valori di partenza (Italia) fissati prima di ogni modifica; DEFAULTS cambia con il paese scelto.
 const DEFAULTS: PriceMap = {}
 const DEFAULT_LABOR: PriceMap = {}
 for (const [key, value] of Object.entries(PRICE)) if (typeof value === 'number') DEFAULTS[key] = value
 for (const [key, value] of Object.entries(PRICE.laborRate)) DEFAULT_LABOR[key] = value
+const BASE_MATERIALS: PriceMap = { ...DEFAULTS }
+const BASE_LABOR: PriceMap = { ...DEFAULT_LABOR }
+let currentRegion: RegionCode = 'IT'
+
+/** Sceglie il listino predefinito del paese (non applica i prezzi personali: lo fa applyPriceBook). */
+export function setRegion(code: RegionCode): void {
+  currentRegion = code
+  const book = regionBook(code, BASE_MATERIALS, BASE_LABOR)
+  for (const key of Object.keys(DEFAULTS)) DEFAULTS[key] = book[key] ?? BASE_MATERIALS[key]
+  for (const key of Object.keys(DEFAULT_LABOR)) DEFAULT_LABOR[key] = book[`labor.${key}`] ?? BASE_LABOR[key]
+}
+export const currentRegionCode = (): RegionCode => currentRegion
 
 export const MATERIAL_LABELS: Record<string, [string, string]> = {
   paintPerL: ['Pittura', '€/L'], primerPerL: ['Fissativo / primer', '€/L'], roller: ['Rullo', '€/pz'], brush: ['Pennello', '€/pz'],
@@ -31,7 +45,8 @@ export const defaultMaterialPrice = (key: string): number => DEFAULTS[key] ?? 0
 export const defaultLaborRate = (key: string): number => DEFAULT_LABOR[key] ?? 0
 
 /** Applica i prezzi personali al listino usato dai calcoli (riparte sempre dai valori predefiniti). */
-export function applyPriceBook(overrides: PriceMap): void {
+export function applyPriceBook(overrides: PriceMap, region?: RegionCode): void {
+  if (region && region !== currentRegion) setRegion(region)
   const target = PRICE as unknown as Record<string, unknown>
   for (const [key, value] of Object.entries(DEFAULTS)) target[key] = value
   for (const [key, value] of Object.entries(DEFAULT_LABOR)) (PRICE.laborRate as Record<string, number>)[key] = value

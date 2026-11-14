@@ -5,17 +5,19 @@ import { TradeGrid } from '../components/TradeGrid'
 import { useStore } from '../context/Store'
 import { tradeById, tradeStyle } from '../domain/trades'
 import { DIFFICULTY_LABEL, euro, when } from '../lib/format'
-import { inSite, siteNames, siteOf, STATUS_ICON, STATUS_LABEL, STATUSES, statusOf, summarizeByStatus } from '../lib/jobs'
+import { useT } from '../lib/i18n'
+import { inSite, siteNames, siteOf, STATUS_ICON, STATUSES, statusOf, summarizeByStatus } from '../lib/jobs'
 import type { QuoteStatus } from '../domain/types'
 
 export function HomePage() {
   const navigate = useNavigate()
+  const t = useT()
   const { ready, projects, removeProject } = useStore()
   const [statusFilter, setStatusFilter] = useState<QuoteStatus | 'tutti'>('tutti')
   const [siteFilter, setSiteFilter] = useState('')
 
   async function onDelete(id: string, title: string) {
-    if (!window.confirm(`Eliminare «${title}» e le sue foto dal tuo account? Non si può annullare.`)) return
+    if (!window.confirm(t('home.deleteAsk', { title }))) return
     await removeProject(id)
   }
 
@@ -38,32 +40,29 @@ export function HomePage() {
         <div className="hero-grid">
           <div>
             <p className="kicker" style={{ color: 'rgba(255,255,255,.85)' }}>
-              Ciao! Cosa sistemiamo oggi?
+              {t('home.hello')}
             </p>
-            <h1>Una foto, e ti dico cosa fare, con cosa e quanto costa.</h1>
-            <p className="lede">
-              Carica la foto del lavoro: l’assistente riconosce il mestiere, calcola materiali e preventivo e ti guida
-              passo passo fino alla fine.
-            </p>
+            <h1>{t('home.title')}</h1>
+            <p className="lede">{t('home.lede')}</p>
             <ol className="how">
               <li>
-                <b>1</b> Carichi la foto
+                <b>1</b> {t('home.step1')}
               </li>
               <li>
-                <b>2</b> L’AI capisce e calcola
+                <b>2</b> {t('home.step2')}
               </li>
               <li>
-                <b>3</b> Segui la guida
+                <b>3</b> {t('home.step3')}
               </li>
             </ol>
           </div>
           <PhotoDrop
-            title="Trascina qui la foto o tocca per scegliere"
-            hint="Poi l’assistente la analizza e prepara il lavoro"
+            title={t('home.drop')}
+            hint={t('home.dropHint')}
             onFiles={(files) => navigate('/nuovo', { state: { files, auto: true } })}
           >
             <span className="btn" style={{ marginTop: '0.6rem', background: '#fff', color: '#5b4bff' }}>
-              📷 Scegli una foto
+              {t('home.pick')}
             </span>
           </PhotoDrop>
         </div>
@@ -72,71 +71,76 @@ export function HomePage() {
       {nextPhase && next ? (
         <div className="next-card">
           <div>
-            <p className="kicker">Riprendi da qui</p>
+            <p className="kicker">{t('home.resume')}</p>
             <h3>
               {next.title} · {nextPhase.title}
             </h3>
-            <p className="help">Prossimo passo del lavoro in corso.</p>
+            <p className="help">{t('home.resumeHelp')}</p>
           </div>
           <Link className="btn solid" to={`/progetto/${next.id}?tab=passi`}>
-            Continua il lavoro →
+            {t('home.resumeBtn')}
           </Link>
         </div>
       ) : null}
 
       <div className="kpis">
         <div className="kpi" style={{ '--c': '#5b4bff' } as CSSProperties}>
-          <span>Lavori</span>
+          <span>{t('home.kpiJobs')}</span>
           <strong>{projects.length}</strong>
         </div>
         <div className="kpi" style={{ '--c': '#ff6b35' } as CSSProperties}>
-          <span>Preventivi totali</span>
+          <span>{t('home.kpiQuotes')}</span>
           <strong>{euro(total)}</strong>
         </div>
         <div className="kpi" style={{ '--c': '#0ea5e9' } as CSSProperties}>
-          <span>Accettati</span>
+          <span>{t('home.kpiAccepted')}</span>
           <strong>{euro(summary.accettato.total)}</strong>
         </div>
         <div className="kpi" style={{ '--c': '#10b981' } as CSSProperties}>
-          <span>Avanzamento</span>
+          <span>{t('home.kpiProgress')}</span>
           <strong>{progress}%</strong>
         </div>
         <div className="kpi" style={{ '--c': '#ec4899' } as CSSProperties}>
-          <span>In corso</span>
+          <span>{t('home.kpiActive')}</span>
           <strong>{active.length}</strong>
         </div>
       </div>
 
       <div className="section-head">
         <div>
-          <h2>Scegli il tipo di lavoro</h2>
-          <p className="help">Tocca una card: si apre la pagina dove inserisci misure e descrizione.</p>
+          <h2>{t('home.chooseTrade')}</h2>
+          <p className="help">{t('home.chooseTradeHelp')}</p>
         </div>
       </div>
       <TradeGrid link />
 
       <div className="section-head">
-        <h2>I tuoi lavori</h2>
-        <Link className="btn sm" to="/nuovo">
-          ➕ Nuovo lavoro
-        </Link>
+        <h2>{t('home.myJobs')}</h2>
+        <div className="inline-actions">
+          <Link className="btn sm ghost" to="/archivio">
+            {t('arch.openAll')}
+          </Link>
+          <Link className="btn sm" to="/nuovo">
+            {t('home.newJob')}
+          </Link>
+        </div>
       </div>
       {projects.length > 0 ? (
         <div className="filters no-print">
           <div className="chips" role="group" aria-label="Filtra per stato">
             <button type="button" className={statusFilter === 'tutti' ? 'chip on' : 'chip'} onClick={() => setStatusFilter('tutti')}>
-              Tutti ({projects.length})
+              {t('home.all')} ({projects.length})
             </button>
             {STATUSES.map((status) => (
               <button key={status} type="button" className={statusFilter === status ? 'chip on' : 'chip'} onClick={() => setStatusFilter(status)}>
-                {STATUS_ICON[status]} {STATUS_LABEL[status]} ({summary[status].count})
+                {STATUS_ICON[status]} {t(`status.${status}`)} ({summary[status].count})
               </button>
             ))}
           </div>
           {sites.length > 0 ? (
             <div className="chips" role="group" aria-label="Filtra per cantiere">
               <button type="button" className={siteFilter === '' ? 'chip on' : 'chip'} onClick={() => setSiteFilter('')}>
-                Tutti i cantieri
+                {t('home.allSites')}
               </button>
               {sites.map((name) => (
                 <button key={name} type="button" className={siteFilter === name ? 'chip on' : 'chip'} onClick={() => setSiteFilter(name)}>
@@ -145,21 +149,21 @@ export function HomePage() {
               ))}
               {siteFilter ? (
                 <Link className="btn sm solid" to={`/cantiere/${encodeURIComponent(siteFilter)}`}>
-                  🧾 Preventivo unico del cantiere
+                  {t('home.siteQuote')}
                 </Link>
               ) : null}
             </div>
           ) : null}
         </div>
       ) : null}
-      {!ready ? <p>Apro l’archivio…</p> : null}
+      {!ready ? <p>{t('home.opening')}</p> : null}
       {ready && projects.length === 0 ? (
         <div className="empty">
           <p style={{ fontSize: '2rem', margin: 0 }}>🧰</p>
           <p>
-            <strong>Ancora nessun lavoro.</strong>
+            <strong>{t('home.none')}</strong>
           </p>
-          <p>Carica una foto qui sopra oppure scegli un mestiere: in due minuti hai materiali e preventivo.</p>
+          <p>{t('home.noneHelp')}</p>
         </div>
       ) : null}
       <div className="job-list">
@@ -180,7 +184,7 @@ export function HomePage() {
                       {trade.name} · difficoltà {DIFFICULTY_LABEL[difficulty].toLowerCase()}
                     </em>
                     <em>
-                      {STATUS_ICON[statusOf(project)]} {STATUS_LABEL[statusOf(project)]}
+                      {STATUS_ICON[statusOf(project)]} {t(`status.${statusOf(project)}`)}
                       {siteOf(project) ? ` · 🏗 ${siteOf(project)}` : ''}
                     </em>
                   </div>
@@ -188,7 +192,7 @@ export function HomePage() {
                 <div className="job-meta">
                   <b>{euro(project.quote.totalEuro)}</b>
                   <small className="help">
-                    {done}/{project.phases.length} fasi
+                    {t('home.phases', { done, total: project.phases.length })}
                   </small>
                 </div>
                 <div className="progress" aria-label={`Avanzamento ${pct}%`}>
@@ -198,7 +202,7 @@ export function HomePage() {
               <div className="job-foot">
                 <small className="help">{when(project.updatedAt)}</small>
                 <button type="button" className="btn ghost sm danger" onClick={() => void onDelete(project.id, project.title)}>
-                  🗑 Elimina
+                  {t('home.delete')}
                 </button>
               </div>
             </article>
