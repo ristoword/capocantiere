@@ -1,12 +1,13 @@
 import type { JobBody, Settings, VideoHit } from '../domain/types'
 import { tradeById } from '../domain/trades'
 import { completeJson, ModelError } from './api'
+import { getLang } from './i18n'
 
 /** Cerca video reali su YouTube tramite il server locale. Mai titoli inventati. */
 export async function findVideos(query: string): Promise<VideoHit[]> {
   let response: Response
   try {
-    response = await fetch(`/api/yt/search?q=${encodeURIComponent(query)}`)
+    response = await fetch(`/api/yt/search?q=${encodeURIComponent(query)}&lang=${getLang()}`)
   } catch {
     throw new ModelError('Non riesco a cercare i video: controlla la rete e che l’app sia avviata con npm run dev.')
   }
@@ -29,7 +30,7 @@ export async function videoQueryFor(settings: Settings, job: JobBody, question: 
   try {
     const parsed = await completeJson(
       settings,
-      'Scrivi UNA ricerca YouTube in italiano (massimo 8 parole) che trovi un tutorial pratico, da artigiano, su ciò che chiede l’utente. Rispondi solo con JSON {"query": "..."}.',
+      `Scrivi UNA ricerca YouTube nella lingua dell’utente (${getLang() === 'en' ? 'inglese' : getLang() === 'es' ? 'spagnolo' : 'italiano'}, massimo 8 parole) che trovi un tutorial pratico, da artigiano, su ciò che chiede l’utente. Rispondi solo con JSON {"query": "..."}.`,
       `Mestiere: ${trade}. Lavoro: ${job.title}. Domanda dell’utente: ${question}`,
       [],
     )

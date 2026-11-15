@@ -15,11 +15,13 @@ import { analyzeSite, type SiteAnalysis } from '../lib/assistant'
 import { euro, numIt, qty } from '../lib/format'
 import { shrink } from '../lib/image'
 import { loadSettings } from '../storage/settings'
+import { localeOf } from '../lib/i18n'
+import { Tx, useTx } from '../lib/translate'
 
 const isTrade = (value: string | undefined): value is TradeId => TRADES.some((trade) => trade.id === value)
 
 function autoTitle(trade: TradeId): string {
-  const day = new Date().toLocaleDateString('it-IT', { day: 'numeric', month: 'short' })
+  const day = new Date().toLocaleDateString(localeOf(), { day: 'numeric', month: 'short' })
   return `${tradeById(trade).name} · ${day}`
 }
 
@@ -32,6 +34,7 @@ export function JobBuilderPage() {
 }
 
 function Builder({ tradeId, fascicolo }: { tradeId: TradeId | null; fascicolo: string }) {
+  const tx = useTx()
   const navigate = useNavigate()
   const location = useLocation()
   const routed = (location.state ?? {}) as { files?: File[]; auto?: boolean }
@@ -68,7 +71,7 @@ function Builder({ tradeId, fascicolo }: { tradeId: TradeId | null; fascicolo: s
 
   async function runAnalyze(list: File[], text: string, hint: TradeId | null) {
     if (list.length === 0 && text.trim().length < 5) {
-      setMessage('Aggiungi almeno una foto oppure scrivi due righe su cosa vuoi fare.')
+      setMessage(tx('Aggiungi almeno una foto oppure scrivi due righe su cosa vuoi fare.'))
       return
     }
     setAnalyzing(true)
@@ -83,7 +86,7 @@ function Builder({ tradeId, fascicolo }: { tradeId: TradeId | null; fascicolo: s
       setTitle((current) => current.trim() || result.title)
       setDescription((current) => (current.trim().length >= 15 ? current : result.description))
     } catch (reason) {
-      setMessage(reason instanceof Error ? reason.message : 'Analisi non riuscita.')
+      setMessage(reason instanceof Error ? reason.message : tx('Analisi non riuscita.'))
     } finally {
       setAnalyzing(false)
     }
@@ -171,17 +174,17 @@ function Builder({ tradeId, fascicolo }: { tradeId: TradeId | null; fascicolo: s
   return (
     <div className="page" style={css}>
       <div className="crumbs no-print">
-        <Link to="/">Dashboard</Link> <span>›</span>
-        <span>{existing ? 'Modifica misure' : info ? info.name : 'Nuovo lavoro'}</span>
+        <Link to="/"><Tx>Dashboard</Tx></Link> <span>›</span>
+        <span>{tx(existing ? 'Modifica misure' : info ? info.name : 'Nuovo lavoro')}</span>
       </div>
       <div className="builder-head">
         <span className="trade-ico">{style?.icon ?? '📷'}</span>
         <div>
-          <h1>{existing ? `Ricalcola: ${existing.title}` : info ? info.name : 'Parti da una foto'}</h1>
+          <h1>{existing ? `${tx('Ricalcola:')} ${existing.title}` : tx(info ? info.name : 'Parti da una foto')}</h1>
           <p className="lede" style={{ margin: 0 }}>
             {info
-              ? info.blurb
-              : 'Carica una foto o descrivi il lavoro: l’assistente capisce di cosa si tratta e compila le misure per te.'}
+              ? tx(info.blurb)
+              : tx('Carica una foto o descrivi il lavoro: l’assistente capisce di cosa si tratta e compila le misure per te.')}
           </p>
         </div>
       </div>
@@ -190,13 +193,13 @@ function Builder({ tradeId, fascicolo }: { tradeId: TradeId | null; fascicolo: s
         <div className="stack">
           {existing ? (
             <p className="banner">
-              Stai ricalcolando un fascicolo esistente: i prezzi che hai modificato restano, quantità e ore si
-              aggiornano.
+              <Tx>Stai ricalcolando un fascicolo esistente: i prezzi che hai modificato restano, quantità e ore si
+              aggiornano.</Tx>
             </p>
           ) : (
             <section className="card">
               <h2>
-                <span className="step-n">1</span> Mostrami il lavoro
+                <span className="step-n">1</span> <Tx>Mostrami il lavoro</Tx>
               </h2>
               <PhotoDrop
                 light
@@ -222,17 +225,17 @@ function Builder({ tradeId, fascicolo }: { tradeId: TradeId | null; fascicolo: s
                 </div>
               ) : null}
               <label className="field" style={{ marginTop: '0.9rem' }}>
-                <span className="field-label">Racconta cosa c’è da fare</span>
+                <span className="field-label"><Tx>Racconta cosa c’è da fare</Tx></span>
                 <textarea
                   value={description}
                   onChange={(event) => setDescription(event.target.value)}
-                  placeholder={style?.placeholder ?? 'Es. Il muro della cucina ha una macchia e vorrei ridipingerlo'}
+                  placeholder={tx(style?.placeholder ?? 'Es. Il muro della cucina ha una macchia e vorrei ridipingerlo')}
                 />
               </label>
               <div className="ai-box">
-                <strong>✨ Lascia fare all’assistente</strong>
+                <strong><Tx>✨ Lascia fare all’assistente</Tx></strong>
                 <p className="help" style={{ margin: 0 }}>
-                  Guarda foto e testo, riconosce il mestiere, stima le misure e compila tutto. Tu controlli e correggi.
+                  <Tx>Guarda foto e testo, riconosce il mestiere, stima le misure e compila tutto. Tu controlli e correggi.</Tx>
                 </p>
                 <button
                   type="button"
@@ -240,31 +243,31 @@ function Builder({ tradeId, fascicolo }: { tradeId: TradeId | null; fascicolo: s
                   disabled={analyzing}
                   onClick={() => void runAnalyze(files, description, trade)}
                 >
-                  {analyzing ? '🔍 Sto guardando…' : '✨ Analizza e compila per me'}
+                  <Tx>{analyzing ? '🔍 Sto guardando…' : '✨ Analizza e compila per me'}</Tx>
                 </button>
               </div>
               {analysis ? (
                 <div className="ai-note">
                   <span className="source">
-                    Analisi AI · {tradeById(analysis.trade).name} · affidabilità {analysis.confidence}
+                    <Tx>Analisi AI ·</Tx> <Tx>{tradeById(analysis.trade).name}</Tx> <Tx>· affidabilità</Tx> {analysis.confidence}
                   </span>
                   {analysis.whatISee ? <p>{analysis.whatISee}</p> : null}
                   {analysis.assumptions.length > 0 ? (
                     <>
-                      <h3>Stime a occhio: controllale</h3>
+                      <h3><Tx>Stime a occhio: controllale</Tx></h3>
                       <ul className="plain-list">
                         {analysis.assumptions.map((item) => (
-                          <li key={item}>{item}</li>
+                          <li key={item}><Tx>{item}</Tx></li>
                         ))}
                       </ul>
                     </>
                   ) : null}
                   {analysis.questions.length > 0 ? (
                     <>
-                      <h3>Per essere preciso mi serve sapere</h3>
+                      <h3><Tx>Per essere preciso mi serve sapere</Tx></h3>
                       <ul className="plain-list">
                         {analysis.questions.map((item) => (
-                          <li key={item}>{item}</li>
+                          <li key={item}><Tx>{item}</Tx></li>
                         ))}
                       </ul>
                     </>
@@ -277,28 +280,28 @@ function Builder({ tradeId, fascicolo }: { tradeId: TradeId | null; fascicolo: s
           {!trade ? (
             <section className="card">
               <h2>
-                <span className="step-n">2</span> Che tipo di lavoro è?
+                <span className="step-n">2</span> <Tx>Che tipo di lavoro è?</Tx>
               </h2>
-              <p className="help">Se hai usato l’analisi lo trovi già scelto. Altrimenti tocca una card.</p>
+              <p className="help"><Tx>Se hai usato l’analisi lo trovi già scelto. Altrimenti tocca una card.</Tx></p>
               <TradeGrid compact value={trade} onChange={chooseTrade} />
             </section>
           ) : (
             <section className="card">
               <h2>
-                <span className="step-n">{existing ? '1' : '2'}</span> Le misure
+                <span className="step-n"><Tx>{existing ? '1' : '2'}</Tx></span> <Tx>Le misure</Tx>
                 {!existing ? (
                   <button type="button" className="btn ghost sm" onClick={() => setTrade(null)}>
-                    Cambia mestiere
+                    <Tx>Cambia mestiere</Tx>
                   </button>
                 ) : null}
               </h2>
               <p className="help">
-                Compila quello che sai: il preventivo a destra si aggiorna mentre scrivi. Ogni campo ha un suggerimento
-                su come misurare.
+                <Tx>Compila quello che sai: il preventivo a destra si aggiorna mentre scrivi. Ogni campo ha un suggerimento
+                su come misurare.</Tx>
               </p>
               {examples.length > 0 && !existing ? (
                 <div className="examples" style={{ marginBottom: '0.8rem' }}>
-                  <span className="help">Prova con un esempio:</span>
+                  <span className="help"><Tx>Prova con un esempio:</Tx></span>
                   {examples.map((example) => (
                     <button
                       key={example.id}
@@ -319,7 +322,7 @@ function Builder({ tradeId, fascicolo }: { tradeId: TradeId | null; fascicolo: s
                 </div>
               ) : null}
               <label className="field" style={{ marginBottom: '0.9rem' }}>
-                <span className="field-label">Nome del lavoro (facoltativo)</span>
+                <span className="field-label"><Tx>Nome del lavoro (facoltativo)</Tx></span>
                 <input
                   value={title}
                   onChange={(event) => setTitle(event.target.value)}
@@ -328,7 +331,7 @@ function Builder({ tradeId, fascicolo }: { tradeId: TradeId | null; fascicolo: s
               </label>
               {existing ? (
                 <label className="field" style={{ marginBottom: '0.9rem' }}>
-                  <span className="field-label">Descrizione</span>
+                  <span className="field-label"><Tx>Descrizione</Tx></span>
                   <textarea value={description} onChange={(event) => setDescription(event.target.value)} />
                 </label>
               ) : null}
@@ -347,17 +350,17 @@ function Builder({ tradeId, fascicolo }: { tradeId: TradeId | null; fascicolo: s
             {preview ? (
               <>
                 <div className="live-head">
-                  <span>Preventivo in tempo reale</span>
+                  <span><Tx>Preventivo in tempo reale</Tx></span>
                   <strong>{euro(preview.quote.totalEuro)}</strong>
                 </div>
                 <div className="live-body">
                   <div className="live-split">
                     <div>
-                      <span>Materiali</span>
+                      <span><Tx>Materiali</Tx></span>
                       <b>{euro(preview.quote.materialsEuro)}</b>
                     </div>
                     <div>
-                      <span>Manodopera · {numIt(preview.quote.laborHours, 1)} h</span>
+                      <span><Tx>Manodopera ·</Tx> {numIt(preview.quote.laborHours, 1)} <Tx>h</Tx></span>
                       <b>{euro(preview.quote.laborEuro)}</b>
                     </div>
                   </div>
@@ -372,7 +375,7 @@ function Builder({ tradeId, fascicolo }: { tradeId: TradeId | null; fascicolo: s
                     ))}
                     {preview.materials.length > 7 ? (
                       <li>
-                        <span className="help">+ {preview.materials.length - 7} altre voci nel fascicolo</span>
+                        <span className="help">+ {preview.materials.length - 7} <Tx>altre voci nel fascicolo</Tx></span>
                       </li>
                     ) : null}
                   </ul>
@@ -383,7 +386,7 @@ function Builder({ tradeId, fascicolo }: { tradeId: TradeId | null; fascicolo: s
               <div className="waiting">
                 <p className="big-ico">🧮</p>
                 <p>
-                  <strong>Il preventivo appare qui</strong>
+                  <strong><Tx>Il preventivo appare qui</Tx></strong>
                 </p>
                 <p className="help">{issue}</p>
               </div>
@@ -392,18 +395,18 @@ function Builder({ tradeId, fascicolo }: { tradeId: TradeId | null; fascicolo: s
           {message ? <p className="banner err">{message}</p> : null}
           <div className="sticky-cta">
             <button type="button" className="btn solid big block" disabled={busy || !preview} onClick={() => void save()}>
-              {busy
+              <Tx>{busy
                 ? '⏳ Preparo il fascicolo…'
                 : existing
                   ? '💾 Aggiorna il fascicolo'
-                  : '🚀 Crea il fascicolo e inizia'}
+                  : '🚀 Crea il fascicolo e inizia'}</Tx>
             </button>
             <p className="help" style={{ textAlign: 'center' }}>
-              Materiali, passi guidati, checklist e assistente: tutto in un unico fascicolo.
+              <Tx>Materiali, passi guidati, checklist e assistente: tutto in un unico fascicolo.</Tx>
             </p>
             {existing ? (
               <Link className="btn block" to={`/progetto/${existing.id}`}>
-                ← Torna al fascicolo senza salvare
+                <Tx>← Torna al fascicolo senza salvare</Tx>
               </Link>
             ) : null}
           </div>

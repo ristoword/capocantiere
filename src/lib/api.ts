@@ -2,6 +2,7 @@ import { FIELDS } from '../domain/fields'
 import type { Difficulty, JobBody, ModelDiagnosis, Phase, Settings } from '../domain/types'
 import { tradeById } from '../domain/trades'
 import { euro, numIt } from './format'
+import { aiLanguageRule } from './i18n'
 
 interface ChatResponse {
   choices?: { message?: { content?: string } }[]
@@ -187,7 +188,11 @@ export async function callChat(
   const headers: Record<string, string> = { 'Content-Type': 'application/json' }
   if (direct) headers.Authorization = `Bearer ${key}`
   else headers['X-Requested-With'] = 'capocantiere' // richiesto dal nostro server (anti-CSRF)
-  const body: Record<string, unknown> = { temperature: options.temperature ?? 0.2, messages }
+  const rule = aiLanguageRule()
+  const localized = rule ? messages.map((item, index) => (index === 0 && item.role === 'system' && typeof item.content === 'string' ? { ...item, content: `${item.content}
+
+${rule}` } : item)) : messages
+  const body: Record<string, unknown> = { temperature: options.temperature ?? 0.2, messages: localized }
   if (direct) body.model = settings.model.trim() || 'gpt-4o-mini'
   if (options.json) body.response_format = { type: 'json_object' }
   if (options.maxTokens) body.max_tokens = options.maxTokens

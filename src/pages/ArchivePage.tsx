@@ -5,6 +5,7 @@ import { tradeById, tradeStyle } from '../domain/trades'
 import type { Project } from '../domain/types'
 import { euro, when } from '../lib/format'
 import { useT } from '../lib/i18n'
+import { Tx } from '../lib/translate'
 import { statusOf } from '../lib/jobs'
 
 const csvCell = (value: string | number) => `"${String(value).replace(/"/g, '""')}"`
@@ -100,7 +101,7 @@ export function ArchivePage() {
               <div className="archive-main">
                 <strong>{project.title}</strong>
                 <em>
-                  {tradeById(project.trade).name}
+                  <Tx>{tradeById(project.trade).name}</Tx>
                   {project.client?.name ? ` · ${project.client.name}` : ''}
                   {project.siteName ? ` · 🏗 ${project.siteName}` : ''}
                 </em>

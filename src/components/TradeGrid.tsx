@@ -1,6 +1,7 @@
 import type { CSSProperties } from 'react'
 import { Link } from 'react-router-dom'
 import { TRADES, tradeStyle } from '../domain/trades'
+import { Tx } from '../lib/translate'
 import type { TradeId } from '../domain/types'
 
 /** Card dei mestieri. Con `to` aprono la pagina del mestiere; con `onChange` selezionano. */
@@ -24,8 +25,8 @@ export function TradeGrid({
           <>
             <span className="trade-ico">{style.icon}</span>
             <span>
-              <strong>{trade.name}</strong>
-              {compact ? null : <em style={{ display: 'block' }}>{trade.short}</em>}
+              <strong><Tx>{trade.name}</Tx></strong>
+              {compact ? null : <em style={{ display: 'block' }}><Tx>{trade.short}</Tx></em>}
             </span>
           </>
         )

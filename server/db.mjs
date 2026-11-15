@@ -75,6 +75,16 @@ const MIGRATIONS = [
   ALTER TABLE users ADD COLUMN stripe_customer TEXT NOT NULL DEFAULT '';
   UPDATE users SET trial_ends = (CAST(strftime('%s','now') AS INTEGER) + 7 * 86400) * 1000;
   `,
+  // Cache condivisa delle traduzioni dei testi dell'app.
+  `
+  CREATE TABLE translations (
+    lang TEXT NOT NULL,
+    hash TEXT NOT NULL,
+    src TEXT NOT NULL,
+    out TEXT NOT NULL,
+    PRIMARY KEY (lang, hash)
+  );
+  `,
 ]
 
 export function openDatabase(file) {

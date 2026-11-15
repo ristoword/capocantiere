@@ -4,8 +4,9 @@ import { PhotoDrop } from '../components/PhotoDrop'
 import { TradeGrid } from '../components/TradeGrid'
 import { useStore } from '../context/Store'
 import { tradeById, tradeStyle } from '../domain/trades'
-import { DIFFICULTY_LABEL, euro, when } from '../lib/format'
+import { euro, when } from '../lib/format'
 import { useT } from '../lib/i18n'
+import { Tx } from '../lib/translate'
 import { inSite, siteNames, siteOf, STATUS_ICON, STATUSES, statusOf, summarizeByStatus } from '../lib/jobs'
 import type { QuoteStatus } from '../domain/types'
 
@@ -181,7 +182,7 @@ export function HomePage() {
                   <div>
                     <strong>{project.title}</strong>
                     <em>
-                      {trade.name} · difficoltà {DIFFICULTY_LABEL[difficulty].toLowerCase()}
+                      <Tx>{trade.name}</Tx> · {t('diff.label')} {t(`diff.${difficulty}`)}
                     </em>
                     <em>
                       {STATUS_ICON[statusOf(project)]} {t(`status.${statusOf(project)}`)}

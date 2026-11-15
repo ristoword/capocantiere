@@ -1,6 +1,8 @@
 import type { Project } from '../domain/types'
 import { tradeById } from '../domain/trades'
 import { euro, numIt, qty } from './format'
+import { translate } from './i18n'
+import { tx } from './translate'
 
 const round2 = (value: number): number => Math.round((value + Number.EPSILON) * 100) / 100
 
@@ -39,21 +41,21 @@ export function quoteMessage(project: Project, business: string): string {
   const meta = project.quoteMeta
   const totals = withVat(project.quote.totalEuro, meta?.vatPercent ?? 22)
   const lines = project.materials.map(
-    (line) => `• ${line.name}: ${qty(line.quantity)} ${line.unit} × ${euro(line.unitPrice)} = ${euro(line.quantity * line.unitPrice)}`,
+    (line) => `• ${tx(line.name)}: ${qty(line.quantity)} ${tx(line.unit)} × ${euro(line.unitPrice)} = ${euro(line.quantity * line.unitPrice)}`,
   )
   return [
-    `${business ? `${business} — ` : ''}PREVENTIVO${meta ? ` n. ${meta.number}` : ''}`,
-    `${project.title} (${tradeById(project.trade).name})`,
-    project.client?.name ? `Cliente: ${project.client.name}` : '',
+    `${business ? `${business} — ` : ''}${translate('q.title')}${meta ? ` ${translate('q.n')} ${meta.number}` : ''}`,
+    `${project.title} (${tx(tradeById(project.trade).name)})`,
+    project.client?.name ? `${translate('q.client')}: ${project.client.name}` : '',
     '',
     ...lines,
-    `Manodopera: ${numIt(project.quote.laborHours, 1)} h × ${euro(project.quote.hourlyRate)} = ${euro(project.quote.laborEuro)}`,
+    `${translate('q.labor')}: ${numIt(project.quote.laborHours, 1)} h × ${euro(project.quote.hourlyRate)} = ${euro(project.quote.laborEuro)}`,
     '',
-    `Imponibile: ${euro(totals.net)}`,
-    `IVA ${meta?.vatPercent ?? 22}%: ${euro(totals.vat)}`,
-    `TOTALE: ${euro(totals.gross)}`,
+    `${translate('q.net')}: ${euro(totals.net)}`,
+    `${translate('q.vat')} ${meta?.vatPercent ?? 22}%: ${euro(totals.vat)}`,
+    `${translate('q.total')}: ${euro(totals.gross)}`,
     '',
-    'Stima indicativa, soggetta a sopralluogo.',
+    translate('q.note'),
   ]
     .filter((line, index, all) => line !== '' || all[index - 1] !== '')
     .join('\n')

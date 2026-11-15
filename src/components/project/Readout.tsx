@@ -1,13 +1,15 @@
 import type { CalcStep, MaterialLine, Quote, SlopeInfo, TechNote } from '../../domain/types'
 import { euro, numIt, qty } from '../../lib/format'
+import { Tx } from '../../lib/translate'
+
 
 export function Notes({ notes }: { notes: TechNote[] }) {
   return (
     <ul className="notes">
       {notes.map((item) => (
         <li key={item.text}>
-          <span className="source">{item.source}</span>
-          <p>{item.text}</p>
+          <span className="source"><Tx>{item.source}</Tx></span>
+          <p><Tx>{item.text}</Tx></p>
         </li>
       ))}
     </ul>
@@ -17,26 +19,26 @@ export function Notes({ notes }: { notes: TechNote[] }) {
 export function SlopeCard({ slope }: { slope: SlopeInfo }) {
   return (
     <section className="slope">
-      <h3>Pendenza</h3>
-      <p className="formula">{slope.formula}</p>
+      <h3><Tx>Pendenza</Tx></h3>
+      <p className="formula"><Tx>{slope.formula}</Tx></p>
       <p>{slope.example}</p>
       <dl className="metrics">
         <div>
-          <dt>Pendenza</dt>
+          <dt><Tx>Pendenza</Tx></dt>
           <dd>{numIt(slope.percent, 1)}%</dd>
         </div>
         <div>
-          <dt>Dislivello per metro</dt>
-          <dd>{numIt(slope.cmPerMeter, 1)} cm/m</dd>
+          <dt><Tx>Dislivello per metro</Tx></dt>
+          <dd>{numIt(slope.cmPerMeter, 1)} <Tx>cm/m</Tx></dd>
         </div>
         <div>
-          <dt>Sulla lunghezza di {numIt(slope.lengthM, 1)} m</dt>
-          <dd>{numIt(slope.totalCm, 1)} cm</dd>
+          <dt><Tx>Sulla lunghezza di</Tx> {numIt(slope.lengthM, 1)} <Tx>m</Tx></dt>
+          <dd>{numIt(slope.totalCm, 1)} <Tx>cm</Tx></dd>
         </div>
       </dl>
       <p>
-        Sul rilievo di questo fascicolo: {numIt(slope.percent, 1)}% = {numIt(slope.cmPerMeter, 1)} cm per metro. Su{' '}
-        {numIt(slope.lengthM, 1)} m il dislivello è {numIt(slope.totalCm, 1)} cm.
+        <Tx>Sul rilievo di questo fascicolo:</Tx> {numIt(slope.percent, 1)}% = {numIt(slope.cmPerMeter, 1)} <Tx>cm per metro. Su</Tx>{' '}
+        {numIt(slope.lengthM, 1)} <Tx>m il dislivello è</Tx> {numIt(slope.totalCm, 1)} <Tx>cm.</Tx>
       </p>
     </section>
   )
@@ -47,8 +49,8 @@ export function CalcList({ steps }: { steps: CalcStep[] }) {
     <ol className="calc-list">
       {steps.map((item) => (
         <li key={item.label}>
-          <strong>{item.label}</strong>
-          <span className="formula">{item.formula}</span>
+          <strong><Tx>{item.label}</Tx></strong>
+          <span className="formula"><Tx>{item.formula}</Tx></span>
           <b>{item.result}</b>
         </li>
       ))}
@@ -77,19 +79,19 @@ export function MaterialsTable({
       <table>
         <thead>
           <tr>
-            <th>Voce</th>
-            <th>Quantità</th>
-            <th>Prezzo</th>
-            <th>Importo</th>
+            <th><Tx>Voce</Tx></th>
+            <th><Tx>Quantità</Tx></th>
+            <th><Tx>Prezzo</Tx></th>
+            <th><Tx>Importo</Tx></th>
           </tr>
         </thead>
         <tbody>
           {lines.map((line) => (
             <tr key={line.id}>
               <td>
-                <strong>{line.name}</strong>
+                <strong><Tx>{line.name}</Tx></strong>
                 <small className="help">
-                  Sfrido: {line.wasteLabel}. Da misurare: {line.measureNote} {line.sourceNote}
+                  <Tx>Sfrido:</Tx> <Tx>{line.wasteLabel}</Tx><Tx>. Da misurare:</Tx> <Tx>{line.measureNote}</Tx> <Tx>{line.sourceNote}</Tx>
                 </small>
               </td>
               <td>
@@ -111,7 +113,7 @@ export function MaterialsTable({
                 ) : (
                   qty(line.quantity)
                 )}{' '}
-                {line.unit}
+                <Tx>{line.unit}</Tx>
               </td>
               <td>
                 {editable ? (
@@ -160,21 +162,21 @@ export function QuoteBox({
     <div className="quote">
       <div className="quote-grid">
         <div>
-          <span>Materiali</span>
+          <span><Tx>Materiali</Tx></span>
           <strong>{euro(quote.materialsEuro)}</strong>
         </div>
         <div>
-          <span>Manodopera</span>
+          <span><Tx>Manodopera</Tx></span>
           <strong>{euro(quote.laborEuro)}</strong>
         </div>
         <div className="total">
-          <span>Totale</span>
+          <span><Tx>Totale</Tx></span>
           <strong>{euro(quote.totalEuro)}</strong>
         </div>
       </div>
       <div className="labor-edit">
         <label>
-          Ore stimate
+          <Tx>Ore stimate</Tx>
           {editable ? (
             <input
               type="number"
@@ -189,11 +191,11 @@ export function QuoteBox({
               }}
             />
           ) : (
-            <b> {numIt(quote.laborHours, 1)} h</b>
+            <b> {numIt(quote.laborHours, 1)} <Tx>h</Tx></b>
           )}
         </label>
         <label>
-          Tariffa €/h
+          <Tx>Tariffa €/h</Tx>
           {editable ? (
             <input
               type="number"
@@ -213,12 +215,12 @@ export function QuoteBox({
         </label>
         {perM2 !== null ? (
           <p>
-            Equivalente sul totale: {euro(perM2)} / m², su {numIt(areaM2 ?? 0)} m².
+            <Tx>Equivalente sul totale:</Tx> {euro(perM2)} <Tx>/ m², su</Tx> {numIt(areaM2 ?? 0)} <Tx>m².</Tx>
           </p>
         ) : null}
       </div>
-      <p className="help">{quote.laborNote}</p>
-      <p className="help">{quote.assumptions}</p>
+      <p className="help"><Tx>{quote.laborNote}</Tx></p>
+      <p className="help"><Tx>{quote.assumptions}</Tx></p>
     </div>
   )
 }

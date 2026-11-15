@@ -6,6 +6,7 @@ import { euro, numIt, qty } from '../lib/format'
 import { inSite, STATUS_ICON, STATUS_LABEL, statusOf } from '../lib/jobs'
 import { withVat } from '../lib/quoteDoc'
 import { copyText } from '../lib/share'
+import { Tx } from '../lib/translate'
 
 /** Preventivo unico di un cantiere: raccoglie i lavori dello stesso cliente. */
 export function SitePage() {
@@ -19,13 +20,13 @@ export function SitePage() {
   const totals = withVat(net, vatPercent)
   const client = jobs.find((project) => project.client?.name)?.client
 
-  if (!ready) return <p className="page">Preparo il cantiere…</p>
+  if (!ready) return <p className="page"><Tx>Preparo il cantiere…</Tx></p>
   if (jobs.length === 0) {
     return (
       <div className="page">
-        <h1>Nessun lavoro in «{name}»</h1>
+        <h1><Tx>Nessun lavoro in «</Tx>{name}»</h1>
         <Link className="btn solid" to="/">
-          Torna alla dashboard
+          <Tx>Torna alla dashboard</Tx>
         </Link>
       </div>
     )
@@ -47,16 +48,16 @@ export function SitePage() {
     <article className="page sheet">
       <div className="actions no-print">
         <Link className="btn" to="/">
-          ← Dashboard
+          <Tx>← Dashboard</Tx>
         </Link>
         <button type="button" className="btn solid" onClick={() => window.print()}>
-          🖨 Stampa o salva PDF
+          <Tx>🖨 Stampa o salva PDF</Tx>
         </button>
         <a className="btn" target="_blank" rel="noreferrer" href={`https://wa.me/?text=${encodeURIComponent(text)}`}>
-          💬 WhatsApp
+          <Tx>💬 WhatsApp</Tx>
         </a>
         <button type="button" className="btn" onClick={() => void copyText(text)}>
-          📋 Copia testo
+          <Tx>📋 Copia testo</Tx>
         </button>
       </div>
       <header className="quote-head">
@@ -70,7 +71,7 @@ export function SitePage() {
           </p>
         </div>
         <div className="quote-meta">
-          <p className="kicker">Cantiere</p>
+          <p className="kicker"><Tx>Cantiere</Tx></p>
           <h2 style={{ margin: 0 }}>{name}</h2>
           <p>{client?.name ?? ''}</p>
         </div>
@@ -79,28 +80,28 @@ export function SitePage() {
       {jobs.map((project) => (
         <section key={project.id}>
           <h3>
-            {project.title} <small className="help">· {tradeById(project.trade).name} · {STATUS_ICON[statusOf(project)]} {STATUS_LABEL[statusOf(project)]}</small>
+            {project.title} <small className="help">· <Tx>{tradeById(project.trade).name}</Tx> · {STATUS_ICON[statusOf(project)]} <Tx>{STATUS_LABEL[statusOf(project)]}</Tx></small>
           </h3>
           <div className="table-wrap">
             <table className="table">
               <tbody>
                 {project.materials.map((line) => (
                   <tr key={line.id}>
-                    <td>{line.name}</td>
+                    <td><Tx>{line.name}</Tx></td>
                     <td>
-                      {qty(line.quantity)} {line.unit}
+                      {qty(line.quantity)} <Tx>{line.unit}</Tx>
                     </td>
                     <td>{euro(line.quantity * line.unitPrice)}</td>
                   </tr>
                 ))}
                 <tr>
-                  <td>Manodopera</td>
-                  <td>{numIt(project.quote.laborHours, 1)} h</td>
+                  <td><Tx>Manodopera</Tx></td>
+                  <td>{numIt(project.quote.laborHours, 1)} <Tx>h</Tx></td>
                   <td>{euro(project.quote.laborEuro)}</td>
                 </tr>
                 <tr>
                   <td colSpan={2}>
-                    <strong>Totale lavoro</strong>
+                    <strong><Tx>Totale lavoro</Tx></strong>
                   </td>
                   <td>
                     <strong>{euro(project.quote.totalEuro)}</strong>
@@ -114,19 +115,19 @@ export function SitePage() {
 
       <dl className="quote-sum">
         <div>
-          <dt>Imponibile ({jobs.length} lavori)</dt>
+          <dt><Tx>Imponibile (</Tx>{jobs.length} <Tx>lavori)</Tx></dt>
           <dd>{euro(totals.net)}</dd>
         </div>
         <div>
-          <dt>IVA {vatPercent}%</dt>
+          <dt><Tx>IVA</Tx> {vatPercent}%</dt>
           <dd>{euro(totals.vat)}</dd>
         </div>
         <div className="grand">
-          <dt>Totale</dt>
+          <dt><Tx>Totale</Tx></dt>
           <dd>{euro(totals.gross)}</dd>
         </div>
       </dl>
-      <p className="help">Stima basata sulle misure indicate, soggetta a sopralluogo.</p>
+      <p className="help"><Tx>Stima basata sulle misure indicate, soggetta a sopralluogo.</Tx></p>
     </article>
   )
 }

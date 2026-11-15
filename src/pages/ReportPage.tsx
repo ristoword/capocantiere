@@ -4,21 +4,24 @@ import { useProjectPhotos } from '../components/project/usePhotos'
 import { RiskNotice } from '../components/RiskNotice'
 import { useStore } from '../context/Store'
 import { tradeById } from '../domain/trades'
-import { DIFFICULTY_LABEL, when } from '../lib/format'
+import { when } from '../lib/format'
+import { useT } from '../lib/i18n'
+import { Tx } from '../lib/translate'
 
 export function ReportPage() {
   const { id = '' } = useParams()
+  const t = useT()
   const { ready, projects } = useStore()
   const project = projects.find((item) => item.id === id)
   const photos = useProjectPhotos(id, 0)
 
-  if (!ready) return <p className="page">Preparo il report…</p>
+  if (!ready) return <p className="page"><Tx>Preparo il report…</Tx></p>
   if (!project) {
     return (
       <div className="page">
-        <h1>Fascicolo non trovato</h1>
+        <h1><Tx>Fascicolo non trovato</Tx></h1>
         <Link className="btn solid" to="/">
-          Torna alla dashboard
+          <Tx>Torna alla dashboard</Tx>
         </Link>
       </div>
     )
@@ -33,21 +36,21 @@ export function ReportPage() {
     <article className="page sheet">
       <div className="actions no-print">
         <Link className="btn" to={`/progetto/${project.id}`}>
-          ← Torna al fascicolo
+          <Tx>← Torna al fascicolo</Tx>
         </Link>
         <button type="button" className="btn solid" onClick={() => window.print()}>
-          🖨 Stampa o salva PDF
+          <Tx>🖨 Stampa o salva PDF</Tx>
         </button>
       </div>
       <header className="docket-head">
-        <p className="kicker">Report finale · {project.id.slice(0, 8).toUpperCase()}</p>
+        <p className="kicker"><Tx>Report finale ·</Tx> {project.id.slice(0, 8).toUpperCase()}</p>
         <p className="trade-name">
-          {trade.order} {trade.name}
+          {trade.order} <Tx>{trade.name}</Tx>
         </p>
         <h1>{project.title}</h1>
         <p>
-          {when(project.updatedAt)} · Difficoltà {DIFFICULTY_LABEL[difficulty]}
-          {reading ? ' (dal modello)' : ' (stimata dalle misure)'} · Checklist {done}/
+          {when(project.updatedAt)} · {t('diff.label')} {t(`diff.${difficulty}`)}
+          <Tx>{reading ? ' (dal modello)' : ' (stimata dalle misure)'}</Tx> <Tx>· Checklist</Tx> {done}/
           {project.checklist.length}
         </p>
         <p className="quote-line">«{project.description}»</p>
@@ -56,28 +59,28 @@ export function ReportPage() {
       <RiskNotice trade={project.trade} />
 
       <section>
-        <h2>Diagnosi del modello</h2>
+        <h2><Tx>Diagnosi del modello</Tx></h2>
         {reading ? (
           <>
             <p className="help">
-              {reading.photosSent
+              <Tx>{reading.photosSent
                 ? 'Il modello ha ricevuto le foto allegate.'
-                : 'Il modello non ha ricevuto foto: questa lettura non riguarda immagini.'}
+                : 'Il modello non ha ricevuto foto: questa lettura non riguarda immagini.'}</Tx>
             </p>
             <p>{reading.problem}</p>
-            <h3>Punti critici dal modello</h3>
+            <h3><Tx>Punti critici dal modello</Tx></h3>
             <ul>
               {reading.criticalPoints.map((point) => (
-                <li key={point}>{point}</li>
+                <li key={point}><Tx>{point}</Tx></li>
               ))}
             </ul>
-            <h3>Sicurezza dal modello</h3>
+            <h3><Tx>Sicurezza dal modello</Tx></h3>
             <ul>
               {reading.safety.map((item) => (
-                <li key={item}>{item}</li>
+                <li key={item}><Tx>{item}</Tx></li>
               ))}
             </ul>
-            <h3>Note di procedura dal modello</h3>
+            <h3><Tx>Note di procedura dal modello</Tx></h3>
             <p className="detail">{reading.procedureNotes}</p>
           </>
         ) : (
@@ -86,17 +89,17 @@ export function ReportPage() {
           </p>
         )}
         {reading && project.diagnosisError ? (
-          <p className="banner warn">Ultimo tentativo non riuscito: {project.diagnosisError}</p>
+          <p className="banner warn"><Tx>Ultimo tentativo non riuscito:</Tx> {project.diagnosisError}</p>
         ) : null}
-        <h3>Rilievo dalle misure</h3>
-        <p>{project.currentState}</p>
-        <h3>Punti della scheda mestiere</h3>
+        <h3><Tx>Rilievo dalle misure</Tx></h3>
+        <p><Tx>{project.currentState}</Tx></p>
+        <h3><Tx>Punti della scheda mestiere</Tx></h3>
         <ul>
           {project.criticalPoints.map((point) => (
-            <li key={point}>{point}</li>
+            <li key={point}><Tx>{point}</Tx></li>
           ))}
         </ul>
-        <h3>Attrezzi</h3>
+        <h3><Tx>Attrezzi</Tx></h3>
         <p>{project.tools.join(' · ')}</p>
       </section>
 
@@ -106,16 +109,16 @@ export function ReportPage() {
         if (!before || !after) return null
         return (
           <section>
-            <h2>Prima e dopo</h2>
+            <h2><Tx>Prima e dopo</Tx></h2>
             <div className="photo-row before-after">
               <figure>
                 <img src={before.url} alt="Prima" />
-                <figcaption>Prima · {before.name}</figcaption>
+                <figcaption><Tx>Prima ·</Tx> {before.name}</figcaption>
               </figure>
               <figure>
                 <img src={after.url} alt="Dopo" />
                 <figcaption>
-                  Dopo · {project.phases.find((phase) => phase.id === after.phaseId)?.title ?? after.name}
+                  <Tx>Dopo ·</Tx> {project.phases.find((phase) => phase.id === after.phaseId)?.title ?? after.name}
                 </figcaption>
               </figure>
             </div>
@@ -125,7 +128,7 @@ export function ReportPage() {
 
       {photos.length > 0 ? (
         <section>
-          <h2>Foto</h2>
+          <h2><Tx>Foto</Tx></h2>
           <div className="photo-row">
             {photos.map((photo) => (
               <figure key={photo.id}>
@@ -142,46 +145,46 @@ export function ReportPage() {
       {project.slope ? <SlopeCard slope={project.slope} /> : null}
 
       <section>
-        <h2>Quantità</h2>
+        <h2><Tx>Quantità</Tx></h2>
         <CalcList steps={project.calcSteps} />
       </section>
 
       <section>
-        <h2>Materiali</h2>
+        <h2><Tx>Materiali</Tx></h2>
         <MaterialsTable lines={project.materials} />
       </section>
 
       <section>
-        <h2>Preventivo</h2>
+        <h2><Tx>Preventivo</Tx></h2>
         <QuoteBox quote={project.quote} areaM2={project.areaM2} />
       </section>
 
       <section>
-        <h2>Sicurezza — promemoria del mestiere</h2>
+        <h2><Tx>Sicurezza — promemoria del mestiere</Tx></h2>
         <ul>
           {project.safety.map((item) => (
-            <li key={item}>{item}</li>
+            <li key={item}><Tx>{item}</Tx></li>
           ))}
         </ul>
       </section>
 
       <section>
-        <h2>Procedura</h2>
+        <h2><Tx>Procedura</Tx></h2>
         <ol className="phases">
           {project.phases.map((phase, index) => (
             <li key={phase.id} className={phase.done ? 'phase done' : 'phase'}>
               <span className="phase-index">{String(index + 1).padStart(2, '0')}</span>
               <div>
                 <h3>
-                  {phase.title}
-                  {phase.done ? ' — fatta' : ''}
+                  <Tx>{phase.title}</Tx>
+                  <Tx>{phase.done ? ' — fatta' : ''}</Tx>
                 </h3>
-                <p className="detail">{phase.detail}</p>
-                <p>Cerca tutorial: {phase.videoQuery}</p>
-                {phase.visualNote ? <p>Nota di cantiere: {phase.visualNote}</p> : null}
-                {phase.photoConsistent === true ? <p>Il modello ritiene la foto coerente con questa fase.</p> : null}
-                {phase.photoConsistent === false ? <p>Il modello non ritiene la foto coerente con questa fase.</p> : null}
-                {phase.aiText ? <p>Nota del modello: {phase.aiText}</p> : null}
+                <p className="detail"><Tx>{phase.detail}</Tx></p>
+                <p><Tx>Cerca tutorial:</Tx> {phase.videoQuery}</p>
+                {phase.visualNote ? <p><Tx>Nota di cantiere:</Tx> {phase.visualNote}</p> : null}
+                {phase.photoConsistent === true ? <p><Tx>Il modello ritiene la foto coerente con questa fase.</Tx></p> : null}
+                {phase.photoConsistent === false ? <p><Tx>Il modello non ritiene la foto coerente con questa fase.</Tx></p> : null}
+                {phase.aiText ? <p><Tx>Nota del modello:</Tx> {phase.aiText}</p> : null}
               </div>
             </li>
           ))}
@@ -189,22 +192,22 @@ export function ReportPage() {
       </section>
 
       <section>
-        <h2>Checklist</h2>
+        <h2><Tx>Checklist</Tx></h2>
         <ul className="checks">
           {project.checklist.map((item) => (
             <li key={item.id}>
-              {item.checked ? '☑' : '☐'} {item.text}
+              <Tx>{item.checked ? '☑' : '☐'}</Tx> <Tx>{item.text}</Tx>
             </li>
           ))}
         </ul>
       </section>
 
       <section>
-        <h2>Note tecniche</h2>
+        <h2><Tx>Note tecniche</Tx></h2>
         <Notes notes={project.notes} />
         <p className="help">
-          Consumo di riferimento — verificare sulla scheda tecnica del prodotto scelto. I prezzi sono indicativi e
-          modificabili.
+          <Tx>Consumo di riferimento — verificare sulla scheda tecnica del prodotto scelto. I prezzi sono indicativi e
+          modificabili.</Tx>
         </p>
       </section>
     </article>

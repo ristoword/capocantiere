@@ -1,23 +1,25 @@
 import type { Project } from '../domain/types'
 import { tradeById } from '../domain/trades'
 import { euro, numIt, qty } from './format'
+import { translate } from './i18n'
+import { tx } from './translate'
 
 /** Riepilogo del preventivo in testo semplice, pronto da incollare in WhatsApp o in una mail. */
 export function quoteText(project: Project): string {
   const lines = project.materials.map(
-    (line) => `• ${line.name}: ${qty(line.quantity)} ${line.unit} × ${euro(line.unitPrice)} = ${euro(line.quantity * line.unitPrice)}`,
+    (line) => `• ${tx(line.name)}: ${qty(line.quantity)} ${tx(line.unit)} × ${euro(line.unitPrice)} = ${euro(line.quantity * line.unitPrice)}`,
   )
   return [
-    `PREVENTIVO — ${project.title} (${tradeById(project.trade).name})`,
+    `${translate('q.title')} — ${project.title} (${tx(tradeById(project.trade).name)})`,
     '',
-    'MATERIALI',
+    translate('q.materialsCaps'),
     ...lines,
     '',
-    `Materiali: ${euro(project.quote.materialsEuro)}`,
-    `Manodopera: ${numIt(project.quote.laborHours, 1)} h × ${euro(project.quote.hourlyRate)} = ${euro(project.quote.laborEuro)}`,
-    `TOTALE: ${euro(project.quote.totalEuro)}`,
+    `${translate('q.materials')}: ${euro(project.quote.materialsEuro)}`,
+    `${translate('q.labor')}: ${numIt(project.quote.laborHours, 1)} h × ${euro(project.quote.hourlyRate)} = ${euro(project.quote.laborEuro)}`,
+    `${translate('q.total')}: ${euro(project.quote.totalEuro)}`,
     '',
-    'Stima indicativa, non vincolante. Prezzi e consumi da verificare sulla scheda tecnica dei prodotti scelti.',
+    translate('q.noteLong'),
   ].join('\n')
 }
 

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { PhaseGuide } from '../../domain/types'
 import { generateImage, stepPrompt } from '../../lib/illustrate'
 import { loadSettings } from '../../storage/settings'
+import { Tx } from '../../lib/translate'
 
 /** Guida a passi di una fase, con illustrazioni generate su richiesta (per passo o tutte insieme). */
 export function PhaseGuideView({
@@ -51,7 +52,7 @@ export function PhaseGuideView({
 
   return (
     <div className="guide">
-      <span className="source">Guida passo-passo dell’AI{current.minutes ? ` · circa ${current.minutes} min` : ''}</span>
+      <span className="source"><Tx>Guida passo-passo dell’AI</Tx>{current.minutes ? ` · circa ${current.minutes} min` : ''}</span>
       {current.intro ? <p>{current.intro}</p> : null}
       {missing.length > 0 ? (
         <button type="button" className="btn sm no-print" disabled={busy !== null} onClick={() => void draw(missing)}>
@@ -80,7 +81,7 @@ export function PhaseGuideView({
                   disabled={busy !== null}
                   onClick={() => void draw([index])}
                 >
-                  {busy === index ? '🎨 Disegno…' : '🎨 Mostra illustrazione'}
+                  <Tx>{busy === index ? '🎨 Disegno…' : '🎨 Mostra illustrazione'}</Tx>
                 </button>
               )}
             </div>
@@ -89,12 +90,12 @@ export function PhaseGuideView({
       </ol>
       {current.tools.length > 0 ? (
         <p>
-          <strong>Attrezzi:</strong> {current.tools.join(', ')}
+          <strong><Tx>Attrezzi:</Tx></strong> {current.tools.join(', ')}
         </p>
       ) : null}
       {current.mistakes.length > 0 ? (
         <div className="mistakes">
-          <strong>Errori da evitare</strong>
+          <strong><Tx>Errori da evitare</Tx></strong>
           <ul>
             {current.mistakes.map((item) => (
               <li key={item}>{item}</li>

@@ -46,8 +46,8 @@ export function createAiMiddleware(env, hooks = {}) {
     }
     if (url === '/api/yt/search' && req.method === 'GET') {
       try {
-        const q = new URL(req.url || '', 'http://localhost').searchParams.get('q') || ''
-        return send(res, 200, { videos: await searchVideos(q, env) })
+        const params = new URL(req.url || '', 'http://localhost').searchParams
+        return send(res, 200, { videos: await searchVideos(params.get('q') || '', env, params.get('lang') || 'it') })
       } catch (error) {
         return send(res, 502, { error: { message: error instanceof Error ? error.message : 'Ricerca video non riuscita' } })
       }

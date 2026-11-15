@@ -26,12 +26,15 @@ function extractInitialData(html) {
   }
 }
 
-async function viaScrape(query) {
-  const response = await fetch(`https://www.youtube.com/results?search_query=${encodeURIComponent(query)}&hl=it&gl=IT`, {
+const LOCALES = { it: ['it', 'IT', 'it-IT,it;q=0.9'], en: ['en', 'GB', 'en-GB,en;q=0.9'], es: ['es', 'ES', 'es-ES,es;q=0.9'] }
+
+async function viaScrape(query, lang = 'it') {
+  const [hl, gl, accept] = LOCALES[lang] ?? LOCALES.it
+  const response = await fetch(`https://www.youtube.com/results?search_query=${encodeURIComponent(query)}&hl=${hl}&gl=${gl}`, {
     signal: AbortSignal.timeout(10_000),
     headers: {
       'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36',
-      'Accept-Language': 'it-IT,it;q=0.9',
+      'Accept-Language': accept,
       Cookie: 'CONSENT=YES+1; SOCS=CAI',
     },
   })
@@ -60,15 +63,15 @@ async function viaScrape(query) {
   return videos
 }
 
-async function viaApi(query, key) {
+async function viaApi(query, key, lang = 'it') {
   const url = new URL('https://www.googleapis.com/youtube/v3/search')
   url.search = new URLSearchParams({
     part: 'snippet',
     type: 'video',
     videoEmbeddable: 'true',
     maxResults: '4',
-    relevanceLanguage: 'it',
-    regionCode: 'IT',
+    relevanceLanguage: (LOCALES[lang] ?? LOCALES.it)[0],
+    regionCode: (LOCALES[lang] ?? LOCALES.it)[1],
     safeSearch: 'moderate',
     q: query,
     key,
@@ -85,25 +88,27 @@ async function viaApi(query, key) {
   }))
 }
 
-export async function searchVideos(query, env) {
+export async function searchVideos(query, env, lang = 'it') {
+  if (!LOCALES[lang]) lang = 'it'
   const q = String(query || '').trim().slice(0, 140)
   if (!q) throw new Error('Ricerca vuota')
-  const hit = cache.get(q)
+  const cacheKey = `${lang}|${q}`
+  const hit = cache.get(cacheKey)
   if (hit && Date.now() - hit.at < TTL) return hit.videos
   const key = String(env.YOUTUBE_API_KEY || '').trim()
   let videos
   if (key) {
     try {
-      videos = await viaApi(q, key)
+      videos = await viaApi(q, key, lang)
     } catch {
-      videos = await viaScrape(q)
+      videos = await viaScrape(q, lang)
     }
   } else {
-    videos = await viaScrape(q)
+    videos = await viaScrape(q, lang)
   }
   if (videos.length) {
     if (cache.size >= 300) cache.delete(cache.keys().next().value) // la memoria non cresce senza limiti
-    cache.set(q, { at: Date.now(), videos })
+    cache.set(cacheKey, { at: Date.now(), videos })
   }
   return videos
 }

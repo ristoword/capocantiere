@@ -3,6 +3,8 @@ import type { Phase, Project } from '../../domain/types'
 import { blobToDataUrl, verifyPhase } from '../../lib/api'
 import { loadSettings } from '../../storage/settings'
 import type { ViewPhoto } from './usePhotos'
+import { Tx } from '../../lib/translate'
+
 
 export function VisualCheck({
   phase,
@@ -49,19 +51,19 @@ export function VisualCheck({
         onClick={(event) => event.stopPropagation()}
       >
         <header className="modal-head">
-          <h3 id="verifica-titolo">Verifica visiva — {phase.title}</h3>
+          <h3 id="verifica-titolo"><Tx>Verifica visiva —</Tx> {phase.title}</h3>
           <button type="button" className="btn ghost" onClick={onClose}>
-            Chiudi
+            <Tx>Chiudi</Tx>
           </button>
         </header>
         <p className="help">
-          La checklist la compili tu. Il giudizio sulla foto compare solo dopo una risposta valida del modello. Se la
-          chiamata fallisce, resta l’errore: non viene scritta una verifica finta.
+          <Tx>La checklist la compili tu. Il giudizio sulla foto compare solo dopo una risposta valida del modello. Se la
+          chiamata fallisce, resta l’errore: non viene scritta una verifica finta.</Tx>
         </p>
         {photo ? (
           <img className="check-photo" src={photo.url} alt={`Foto della fase ${phase.title}`} />
         ) : (
-          <p>Nessuna foto di fase. Puoi compilare la checklist; senza foto il modello non può dire che l’immagine è coerente.</p>
+          <p><Tx>Nessuna foto di fase. Puoi compilare la checklist; senza foto il modello non può dire che l’immagine è coerente.</Tx></p>
         )}
         <ul className="questions">
           {questions.map((question) => (
@@ -94,18 +96,18 @@ export function VisualCheck({
           ))}
         </ul>
         <label className="field">
-          <span className="field-label">Nota di cantiere</span>
+          <span className="field-label"><Tx>Nota di cantiere</Tx></span>
           <textarea value={visualNote} rows={3} onChange={(event) => setVisualNote(event.target.value)} />
         </label>
         <button type="button" className="btn" onClick={() => void ask()} disabled={busy}>
-          {busy ? 'Chiedo al modello…' : 'Verifica la foto con il modello'}
+          <Tx>{busy ? 'Chiedo al modello…' : 'Verifica la foto con il modello'}</Tx>
         </button>
         {error ? <p className="banner warn">{error}</p> : null}
-        {photoConsistent === true ? <p>Il modello ritiene la foto coerente con questa fase.</p> : null}
-        {photoConsistent === false ? <p>Il modello non ritiene la foto coerente con questa fase.</p> : null}
+        {photoConsistent === true ? <p><Tx>Il modello ritiene la foto coerente con questa fase.</Tx></p> : null}
+        {photoConsistent === false ? <p><Tx>Il modello non ritiene la foto coerente con questa fase.</Tx></p> : null}
         {aiText ? (
           <blockquote className="ai-note">
-            <span className="source">Verifica del modello — non sostituisce il sopralluogo</span>
+            <span className="source"><Tx>Verifica del modello — non sostituisce il sopralluogo</Tx></span>
             <p>{aiText}</p>
           </blockquote>
         ) : null}
@@ -114,7 +116,7 @@ export function VisualCheck({
           className="btn solid"
           onClick={() => onSave({ ...phase, questions, visualNote, aiText, photoConsistent })}
         >
-          Salva la verifica
+          <Tx>Salva la verifica</Tx>
         </button>
       </div>
     </div>

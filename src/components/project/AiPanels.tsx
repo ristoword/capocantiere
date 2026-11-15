@@ -7,11 +7,13 @@ import { euro } from '../../lib/format'
 import { findVideos, videoQueryFor, wantsVideo } from '../../lib/videos'
 import { loadSettings } from '../../storage/settings'
 import { VideoList } from './VideoShelf'
+import { Tx, useTx } from '../../lib/translate'
 
 const errorText = (reason: unknown, fallback: string) => (reason instanceof Error ? reason.message : fallback)
 
 /** Assistente in chat: sa dove sei nel lavoro e ti dice cosa fare ora. */
 export function Assistant({ project, onSave }: { project: Project; onSave: (chat: ChatMessage[]) => Promise<void> }) {
+  const tx = useTx()
   const chat = project.chat ?? []
   const [text, setText] = useState('')
   const [photo, setPhoto] = useState<File | null>(null)
@@ -87,19 +89,19 @@ export function Assistant({ project, onSave }: { project: Project; onSave: (chat
 
   return (
     <section id="assistente" className="assistant no-print">
-      <h2>Assistente — ti guida passo passo</h2>
+      <h2><Tx>Assistente — ti guida passo passo</Tx></h2>
       <p className="help">
-        Conosce misure, materiali, costi e a che punto sei
-        {phase ? ` (ora: «${phase.title}»)` : ''}. Puoi allegare una foto e chiedere «va bene così?».
+        <Tx>Conosce misure, materiali, costi e a che punto sei</Tx>
+        {phase ? ` (ora: «${phase.title}»)` : ''}<Tx>. Puoi allegare una foto e chiedere «va bene così?».</Tx>
       </p>
       <div className="chat">
-        {chat.length === 0 ? <p className="empty">Chiedimi qualcosa, o parti da uno dei suggerimenti qui sotto.</p> : null}
+        {chat.length === 0 ? <p className="empty"><Tx>Chiedimi qualcosa, o parti da uno dei suggerimenti qui sotto.</Tx></p> : null}
         {chat.map((item, index) => (
           <div key={item.id} className={`bubble ${item.role}`}>
-            <span className="who">{item.role === 'user' ? 'Tu' : 'Capocantiere AI'}</span>
+            <span className="who"><Tx>{item.role === 'user' ? 'Tu' : 'Capocantiere AI'}</Tx></span>
             <p>
               {item.text}
-              {item.withPhoto ? ' 📷' : ''}
+              <Tx>{item.withPhoto ? ' 📷' : ''}</Tx>
             </p>
             {item.role === 'assistant' && item.videos ? <VideoList videos={item.videos} query={item.videoQuery ?? ''} /> : null}
             {item.role === 'assistant' && !item.videos ? (
@@ -109,12 +111,12 @@ export function Assistant({ project, onSave }: { project: Project; onSave: (chat
                 disabled={videoBusy !== null || busy}
                 onClick={() => void videosFor(index)}
               >
-                {videoBusy === item.id ? '📺 Cerco…' : '📺 Mostra video su questo'}
+                <Tx>{videoBusy === item.id ? '📺 Cerco…' : '📺 Mostra video su questo'}</Tx>
               </button>
             ) : null}
           </div>
         ))}
-        {busy ? <div className="bubble assistant">Ci penso…</div> : null}
+        {busy ? <div className="bubble assistant"><Tx>Ci penso…</Tx></div> : null}
         <div ref={endRef} />
       </div>
       {error ? <p className="banner warn">{error}</p> : null}
@@ -135,7 +137,7 @@ export function Assistant({ project, onSave }: { project: Project; onSave: (chat
         <textarea
           rows={2}
           value={text}
-          placeholder="Scrivi la tua domanda…"
+          placeholder={tx('Scrivi la tua domanda…')}
           onChange={(event) => setText(event.target.value)}
           onKeyDown={(event) => {
             if (event.key === 'Enter' && !event.shiftKey) {
@@ -145,7 +147,7 @@ export function Assistant({ project, onSave }: { project: Project; onSave: (chat
           }}
         />
         <label className="btn">
-          {photo ? '📷 foto pronta' : '📷 Foto'}
+          <Tx>{photo ? '📷 foto pronta' : '📷 Foto'}</Tx>
           <input
             type="file"
             accept="image/*"
@@ -155,12 +157,12 @@ export function Assistant({ project, onSave }: { project: Project; onSave: (chat
           />
         </label>
         <button type="submit" className="btn solid" disabled={busy || !text.trim()}>
-          Invia
+          <Tx>Invia</Tx>
         </button>
       </form>
       {chat.length > 0 ? (
         <button type="button" className="btn ghost" onClick={() => void onSave([])}>
-          Svuota la conversazione
+          <Tx>Svuota la conversazione</Tx>
         </button>
       ) : null}
     </section>
@@ -196,7 +198,7 @@ export function GuideButton({
           }
         }}
       >
-        {busy ? 'Preparo la guida…' : phase.guide ? 'Rigenera la guida' : 'Spiegami come si fa'}
+        <Tx>{busy ? 'Preparo la guida…' : phase.guide ? 'Rigenera la guida' : 'Spiegami come si fa'}</Tx>
       </button>
       {error ? <p className="banner warn">{error}</p> : null}
     </>
@@ -240,28 +242,28 @@ export function QuoteReviewBox({
           }
         }}
       >
-        {busy ? 'Ragiono sui costi…' : review ? 'Rivedi di nuovo il preventivo' : 'Fai ragionare l’AI sul preventivo'}
+        <Tx>{busy ? 'Ragiono sui costi…' : review ? 'Rivedi di nuovo il preventivo' : 'Fai ragionare l’AI sul preventivo'}</Tx>
       </button>
       {error ? <p className="banner warn">{error}</p> : null}
       {review ? (
         <blockquote className={`ai-note verdict-${review.verdict}`}>
-          <span className="source">Revisione AI — è un parere, i totali restano quelli sopra</span>
+          <span className="source"><Tx>Revisione AI — è un parere, i totali restano quelli sopra</Tx></span>
           <p>
             <strong>{VERDICT[review.verdict]}</strong>
           </p>
           <p>{review.summary}</p>
           {review.suggestedHours !== null && review.suggestedHours !== project.quote.laborHours ? (
             <p>
-              Ore suggerite: <strong>{review.suggestedHours} h</strong> (ora {project.quote.laborHours} h →{' '}
-              {euro(review.suggestedHours * project.quote.hourlyRate)} di manodopera){' '}
+              <Tx>Ore suggerite:</Tx> <strong>{review.suggestedHours} <Tx>h</Tx></strong> <Tx>(ora</Tx> {project.quote.laborHours} <Tx>h →</Tx>{' '}
+              {euro(review.suggestedHours * project.quote.hourlyRate)} <Tx>di manodopera)</Tx>{' '}
               <button type="button" className="btn" onClick={() => onApplyHours(review.suggestedHours as number)}>
-                Applica queste ore
+                <Tx>Applica queste ore</Tx>
               </button>
             </p>
           ) : null}
           {review.missing.length > 0 ? (
             <>
-              <h3>Voci che spesso mancano</h3>
+              <h3><Tx>Voci che spesso mancano</Tx></h3>
               <ul>
                 {review.missing.map((item) => (
                   <li key={item}>{item}</li>
@@ -271,7 +273,7 @@ export function QuoteReviewBox({
           ) : null}
           {review.savingTips.length > 0 ? (
             <>
-              <h3>Dove risparmiare</h3>
+              <h3><Tx>Dove risparmiare</Tx></h3>
               <ul>
                 {review.savingTips.map((item) => (
                   <li key={item}>{item}</li>
@@ -279,7 +281,7 @@ export function QuoteReviewBox({
               </ul>
             </>
           ) : null}
-          {review.clientNote ? <p className="detail">Da dire al cliente: «{review.clientNote}»</p> : null}
+          {review.clientNote ? <p className="detail"><Tx>Da dire al cliente: «</Tx>{review.clientNote}»</p> : null}
         </blockquote>
       ) : null}
     </div>

@@ -65,3 +65,10 @@ export function useT(): (key: MessageKey, vars?: Record<string, string | number>
 export function useLang(): Lang {
   return useSyncExternalStore(subscribe, getLang, getLang)
 }
+
+/** Istruzione di lingua da aggiungere ai prompt dell'AI (vuota in italiano, che è la lingua dei prompt). */
+export function aiLanguageRule(lang: Lang = current): string {
+  if (lang === 'en') return 'LANGUAGE: write every human-readable text of your answer in English (keep the metric units as given). Keep JSON keys, ids and fixed values such as bassa|media|alta|critica|congruo|basso|alto|si|no|ns exactly as specified.'
+  if (lang === 'es') return 'IDIOMA: escribe todos los textos legibles de tu respuesta en español (de España). Mantén exactamente las claves JSON, los identificadores y los valores fijos como bassa|media|alta|critica|congruo|basso|alto|si|no|ns.'
+  return ''
+}

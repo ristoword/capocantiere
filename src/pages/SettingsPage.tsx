@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import type { Settings } from '../domain/types'
 import { callChat } from '../lib/api'
+import { Tx } from '../lib/translate'
 import {
   DEFAULT_SETTINGS,
   envConfig,
@@ -77,12 +78,12 @@ export function SettingsPage() {
 
   return (
     <div className="page narrow">
-      <p className="kicker">Impostazioni</p>
-      <h1>Chiave del modello.</h1>
+      <p className="kicker"><Tx>Impostazioni</Tx></p>
+      <h1><Tx>Chiave del modello.</Tx></h1>
       <p className="lede">
-        Quantità, materiali, pendenza e preventivo si calcolano in questo browser anche senza chiave. La diagnosi delle
+        <Tx>Quantità, materiali, pendenza e preventivo si calcolano in questo browser anche senza chiave. La diagnosi delle
         foto e la verifica di una fase chiamano il modello: se la chiave manca o la risposta non è valida, compare un
-        errore e non un testo finto.
+        errore e non un testo finto.</Tx>
       </p>
       <p className={server?.configured ? 'banner' : 'banner warn'}>
         {server?.configured
@@ -107,13 +108,13 @@ export function SettingsPage() {
       </p>
       <div className="actions" style={{ margin: '0.8rem 0' }}>
         <button type="button" className="btn solid" disabled={testing} onClick={() => void runTest()}>
-          {testing ? 'Provo…' : '🔌 Prova la connessione AI'}
+          <Tx>{testing ? 'Provo…' : '🔌 Prova la connessione AI'}</Tx>
         </button>
       </div>
       {test ? <p className={test.ok ? 'banner' : 'banner err'}>{test.text}</p> : null}
       <form className="card stack" onSubmit={persist}>
         <label className="field">
-          <span className="field-label">Chiave da usare in questo browser</span>
+          <span className="field-label"><Tx>Chiave da usare in questo browser</Tx></span>
           <input
             type="password"
             autoComplete="off"
@@ -123,14 +124,14 @@ export function SettingsPage() {
           />
         </label>
         <label className="field">
-          <span className="field-label">Indirizzo base, compatibile OpenAI</span>
+          <span className="field-label"><Tx>Indirizzo base, compatibile OpenAI</Tx></span>
           <input
             value={settings.baseUrl}
             onChange={(event) => setSettings({ ...settings, baseUrl: event.target.value })}
           />
         </label>
         <label className="field">
-          <span className="field-label">Modello</span>
+          <span className="field-label"><Tx>Modello</Tx></span>
           <input value={settings.model} onChange={(event) => setSettings({ ...settings, model: event.target.value })} />
         </label>
         {env.apiKey ? (
@@ -140,21 +141,21 @@ export function SettingsPage() {
               checked={settings.ignoreEnvKey === true && settings.apiKey.trim().length === 0}
               onChange={(event) => setSettings({ ...settings, apiKey: '', ignoreEnvKey: event.target.checked })}
             />
-            Non usare la chiave dell’ambiente in questo browser
+            <Tx>Non usare la chiave dell’ambiente in questo browser</Tx>
           </label>
         ) : null}
         <p className="help">
-          {draft.source === 'browser'
+          <Tx>{draft.source === 'browser'
             ? 'Al salvataggio questa chiave scritta qui avrà la precedenza.'
             : draft.source === 'env'
               ? 'Al salvataggio, con il campo vuoto, resta la chiave dell’ambiente.'
               : server?.configured
                 ? 'Con il campo vuoto continuerai a usare la chiave del server.'
-                : 'Al salvataggio non ci sarà una chiave utilizzabile.'}
+                : 'Al salvataggio non ci sarà una chiave utilizzabile.'}</Tx>
         </p>
         <div className="actions">
           <button className="btn solid" type="submit">
-            Salva in questo browser
+            <Tx>Salva in questo browser</Tx>
           </button>
           <button
             className="btn"
@@ -167,10 +168,10 @@ export function SettingsPage() {
               setSaved(true)
             }}
           >
-            Dimentica il salvataggio
+            <Tx>Dimentica il salvataggio</Tx>
           </button>
         </div>
-        {saved ? <p className="banner">✅ Salvato solo su questo dispositivo.</p> : null}
+        {saved ? <p className="banner"><Tx>✅ Salvato solo su questo dispositivo.</Tx></p> : null}
       </form>
     </div>
   )

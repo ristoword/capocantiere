@@ -1,5 +1,6 @@
 import type { TradeId } from '../domain/types'
 import { TRADE_RISK } from '../domain/trades'
+import { Tx } from '../lib/translate'
 
 /** Avviso di sicurezza del mestiere, visibile anche in stampa. */
 export function RiskNotice({ trade }: { trade: TradeId }) {
@@ -7,8 +8,8 @@ export function RiskNotice({ trade }: { trade: TradeId }) {
   if (!text) return null
   return (
     <aside className="risk" role="note">
-      <strong>⚠️ Attenzione alla sicurezza</strong>
-      {text}
+      <strong><Tx>⚠️ Attenzione alla sicurezza</Tx></strong>
+      <Tx>{text}</Tx>
     </aside>
   )
 }

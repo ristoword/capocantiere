@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { api } from '../lib/http'
+import { Tx } from '../lib/translate'
 
 /** Pagina aperta dal link di recupero password (email o link dell'amministratore). */
 export function ResetPage() {
@@ -31,31 +32,31 @@ export function ResetPage() {
         <div className="auth-brand">
           <span className="brand-mark">🔑</span>
           <div>
-            <strong>Nuova password</strong>
-            <em>Capocantiere</em>
+            <strong><Tx>Nuova password</Tx></strong>
+            <em><Tx>Capocantiere</Tx></em>
           </div>
         </div>
         {done ? (
           <>
-            <p className="banner">✅ Password cambiata. Ora puoi accedere.</p>
+            <p className="banner"><Tx>✅ Password cambiata. Ora puoi accedere.</Tx></p>
             <a className="btn solid" href="/">
-              Vai all’accesso
+              <Tx>Vai all’accesso</Tx>
             </a>
           </>
         ) : (
           <>
-            {!token ? <p className="banner err">Link non valido: manca il codice.</p> : null}
+            {!token ? <p className="banner err"><Tx>Link non valido: manca il codice.</Tx></p> : null}
             <label className="field">
-              <span className="field-label">Scegli la nuova password</span>
+              <span className="field-label"><Tx>Scegli la nuova password</Tx></span>
               <input type="password" required minLength={8} value={password} onChange={(event) => setPassword(event.target.value)} autoComplete="new-password" />
-              <small>Almeno 8 caratteri.</small>
+              <small><Tx>Almeno 8 caratteri.</Tx></small>
             </label>
             {error ? <p className="banner err" role="alert">{error}</p> : null}
             <button type="submit" className="btn solid" disabled={busy || !token}>
               {busy ? 'Attendi…' : 'Salva la nuova password'}
             </button>
             <p className="help auth-foot">
-              <Link to="/">Torna all’accesso</Link>
+              <Link to="/"><Tx>Torna all’accesso</Tx></Link>
             </p>
           </>
         )}

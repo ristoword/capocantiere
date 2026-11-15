@@ -76,7 +76,7 @@ describe('persistenza dei dati', () => {
     const db = openDatabase(file)
     db.prepare("INSERT INTO users (id, email, name, pass_hash, created_at) VALUES ('u', 'a@b.it', '', 'x', 'n')").run()
     db.exec('PRAGMA user_version = 1') // come un database creato dalla prima versione
-    db.exec('DROP TABLE spend; DROP TABLE reset_tokens;')
+    db.exec('DROP TABLE spend; DROP TABLE reset_tokens; DROP TABLE translations;')
     for (const column of ['trial_ends', 'sub_until', 'sub_source', 'stripe_customer']) db.exec(`ALTER TABLE users DROP COLUMN ${column}`)
     db.close()
     const upgraded = openDatabase(file)

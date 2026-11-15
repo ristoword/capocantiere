@@ -6,6 +6,7 @@ import { openDatabase } from './db.mjs'
 import { clientIp, createLimiter, fail, parseCookies, readJson, readRaw, send } from './http.mjs'
 import { createAiMiddleware } from './aiProxy.mjs'
 import { listBackups, makeBackup } from './backup.mjs'
+import { createTranslator } from './translate.mjs'
 import { billingConfigured, createCheckout, createPortal, interpretEvent, verifyWebhook } from './billing.mjs'
 
 const COOKIE = 'cc_session'
@@ -73,6 +74,7 @@ export function createApi(env, options = {}) {
       q.spendAdd.run(user.id, today(), usage.kind, usage.tokensIn, usage.tokensOut, estimateCost(env, usage), usage.tokensIn, usage.tokensOut, estimateCost(env, usage))
     },
   })
+  const translator = createTranslator(env, db)
   const limiter = createLimiter()
   const inviteCode = String(env.INVITE_CODE || '').trim()
   const signupOpen = String(env.SIGNUP_OPEN || '').toLowerCase() === 'true'
@@ -610,6 +612,23 @@ export function createApi(env, options = {}) {
       if (parts[0] === 'data') return await data(req, res, user, parts.slice(1))
       if (parts[0] === 'account') return await account(req, res, user, parts[1])
       if (parts[0] === 'billing') return await billing(req, res, user, parts[1])
+      if (parts[0] === 'translate' && req.method === 'POST') {
+        // Disponibile anche a prova finita (serve a leggere i propri dati): il costo è contenuto da cache, limiti e budget.
+        const burst = limiter(`translate:${user.id}`, 40, 60 * 1000)
+        if (!burst.ok) {
+          res.setHeader('Retry-After', String(burst.retryAfter))
+          return fail(res, 429, 'Troppe richieste di traduzione. Attendi un minuto.')
+        }
+        const body = await readJson(req, 300_000)
+        if (!Array.isArray(body.texts)) return fail(res, 400, 'Testi mancanti')
+        if (overBudget()) return fail(res, 503, 'Il budget mensile dell’AI è esaurito.')
+        const { map, usage } = await translator.translate(String(body.lang || ''), body.texts)
+        if (usage.calls > 0) {
+          const cost = estimateCost(env, { kind: 'chat', model: usage.model, tokensIn: usage.tokensIn, tokensOut: usage.tokensOut })
+          q.spendAdd.run(user.id, today(), 'translate', usage.tokensIn, usage.tokensOut, cost, usage.tokensIn, usage.tokensOut, cost)
+        }
+        return send(res, 200, { translations: map })
+      }
       if (parts[0] === 'admin') return await admin(req, res, user, parts[1])
       if (parts[0] === 'ai' || parts[0] === 'yt') {
         const kind = url === '/api/ai/image' ? 'image' : parts[0] === 'yt' ? 'video' : 'ai'

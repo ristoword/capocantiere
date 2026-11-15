@@ -4,7 +4,7 @@ import { Assistant, GuideButton, QuoteReviewBox } from '../components/project/Ai
 import { PhaseGuideView } from '../components/project/PhaseGuideView'
 import { VideoShelf } from '../components/project/VideoShelf'
 import { RiskNotice } from '../components/RiskNotice'
-import { STATUS_ICON, STATUS_LABEL, STATUSES, siteNames } from '../lib/jobs'
+import { STATUS_ICON, STATUSES, siteNames } from '../lib/jobs'
 import type { QuoteStatus } from '../domain/types'
 import { PhotoDrop } from '../components/PhotoDrop'
 import { CalcList, MaterialsTable, Notes, QuoteBox, SlopeCard } from '../components/project/Readout'
@@ -15,10 +15,12 @@ import { tradeById, tradeStyle } from '../domain/trades'
 import type { Phase, Project } from '../domain/types'
 import { reprice } from '../engine/reprice'
 import { blobToDataUrl, diagnoseJob } from '../lib/api'
-import { DIFFICULTY_LABEL, euro, numIt, when } from '../lib/format'
+import { euro, numIt, when } from '../lib/format'
+import { useT } from '../lib/i18n'
 import { shrink } from '../lib/image'
 import { copyText, quoteText } from '../lib/share'
 import { loadSettings } from '../storage/settings'
+import { Tx, useTx } from '../lib/translate'
 
 const TABS = [
   { id: 'panoramica', label: 'Panoramica', ico: '🔎' },
@@ -30,6 +32,8 @@ type TabId = (typeof TABS)[number]['id']
 
 export function ProjectPage() {
   const { id = '' } = useParams()
+  const t = useT()
+  const tx = useTx()
   const navigate = useNavigate()
   const [params, setParams] = useSearchParams()
   const { ready, projects, saveProject, addPhoto, removeProject } = useStore()
@@ -86,7 +90,7 @@ export function ProjectPage() {
       await persist({ ...project, photoIds: [...project.photoIds, ...ids] })
     }
     setPhotoVersion((version) => version + 1)
-    setToast(ids.length === 1 ? 'Foto aggiunta' : `${ids.length} foto aggiunte`)
+    setToast(ids.length === 1 ? tx('Foto aggiunta') : `${ids.length} ${tx('foto aggiunte')}`)
   }
 
   async function enrich(current: Project) {
@@ -97,9 +101,9 @@ export function ProjectPage() {
       for (const photo of photos.slice(0, 6)) images.push(await blobToDataUrl(await shrink(photo.blob)))
       const reading = await diagnoseJob(loadSettings(), current, images)
       await persist({ ...current, modelDiagnosis: reading, diagnosisError: '' })
-      setToast('Diagnosi aggiornata')
+      setToast(tx('Diagnosi aggiornata'))
     } catch (reason) {
-      const text = reason instanceof Error ? reason.message : 'Diagnosi del modello non riuscita.'
+      const text = reason instanceof Error ? reason.message : tx('Diagnosi del modello non riuscita.')
       setMessage(text)
       await persist({ ...current, diagnosisError: text })
     } finally {
@@ -107,15 +111,15 @@ export function ProjectPage() {
     }
   }
 
-  if (!ready) return <p className="page">Apro il fascicolo…</p>
+  if (!ready) return <p className="page"><Tx>Apro il fascicolo…</Tx></p>
   if (!project) {
     return (
       <div className="page">
         <div className="empty">
           <p style={{ fontSize: '2rem', margin: 0 }}>🔍</p>
-          <h2>Fascicolo non trovato</h2>
+          <h2><Tx>Fascicolo non trovato</Tx></h2>
           <Link className="btn solid" to="/">
-            Torna alla dashboard
+            <Tx>Torna alla dashboard</Tx>
           </Link>
         </div>
       </div>
@@ -134,11 +138,11 @@ export function ProjectPage() {
   const sitePhotos = photos.filter((item) => item.phaseId === null || project.photoIds.includes(item.id))
 
   async function copyQuote() {
-    setToast((await copyText(quoteText(project as Project))) ? 'Preventivo copiato: incollalo dove vuoi' : 'Copia non riuscita')
+    setToast((await copyText(quoteText(project as Project))) ? tx('Preventivo copiato: incollalo dove vuoi') : tx('Copia non riuscita'))
   }
 
   async function remove() {
-    if (!window.confirm(`Eliminare «${project?.title}» e le sue foto da questo browser? Non si può annullare.`)) return
+    if (!window.confirm(t('home.deleteAsk', { title: project?.title ?? '' }))) return
     await removeProject(id)
     navigate('/')
   }
@@ -146,38 +150,38 @@ export function ProjectPage() {
   return (
     <article className="page" style={{ '--c': style.color } as CSSProperties}>
       <div className="crumbs no-print">
-        <Link to="/">Dashboard</Link> <span>›</span> <span>{trade.name}</span>
+        <Link to="/"><Tx>Dashboard</Tx></Link> <span>›</span> <span><Tx>{trade.name}</Tx></span>
       </div>
       <header className="proj-head">
         <div className="proj-band">
           <span className="trade-ico">{style.icon}</span>
           <div style={{ flex: 1, minWidth: '14rem' }}>
             <p className="kicker">
-              {trade.name} · aggiornato {when(project.updatedAt)}
+              <Tx>{trade.name}</Tx> <Tx>· aggiornato</Tx> {when(project.updatedAt)}
             </p>
             <h1>{project.title}</h1>
           </div>
-          <span className={`badge badge-${difficulty}`}>Difficoltà {DIFFICULTY_LABEL[difficulty].toLowerCase()}</span>
+          <span className={`badge badge-${difficulty}`}>{t('diff.label')} {t(`diff.${difficulty}`)}</span>
         </div>
         <div className="proj-kpis">
           <div>
-            <span>Totale preventivo</span>
+            <span><Tx>Totale preventivo</Tx></span>
             <strong>{euro(project.quote.totalEuro)}</strong>
           </div>
           <div>
-            <span>Materiali</span>
+            <span><Tx>Materiali</Tx></span>
             <strong>{euro(project.quote.materialsEuro)}</strong>
           </div>
           <div>
-            <span>Manodopera</span>
+            <span><Tx>Manodopera</Tx></span>
             <strong>
-              {euro(project.quote.laborEuro)} · {numIt(project.quote.laborHours, 1)} h
+              {euro(project.quote.laborEuro)} · {numIt(project.quote.laborHours, 1)} <Tx>h</Tx>
             </strong>
           </div>
           <div>
-            <span>Avanzamento</span>
+            <span><Tx>Avanzamento</Tx></span>
             <strong>
-              {done}/{project.phases.length} fasi
+              {done}/{project.phases.length} <Tx>fasi</Tx>
             </strong>
             <div className="progress">
               <i style={{ width: `${pct}%` }} />
@@ -186,25 +190,25 @@ export function ProjectPage() {
         </div>
         <div className="proj-meta no-print">
           <label className="field">
-            <span className="field-label">Stato del preventivo</span>
+            <span className="field-label"><Tx>Stato del preventivo</Tx></span>
             <select
               value={project.status ?? 'bozza'}
               onChange={(event) => void saveProject({ ...project, status: event.target.value as QuoteStatus, updatedAt: new Date().toISOString() })}
             >
               {STATUSES.map((status) => (
                 <option key={status} value={status}>
-                  {STATUS_ICON[status]} {STATUS_LABEL[status]}
+                  {STATUS_ICON[status]} {t(`status.${status}`)}
                 </option>
               ))}
             </select>
           </label>
           <label className="field">
-            <span className="field-label">Cantiere / cliente</span>
+            <span className="field-label"><Tx>Cantiere / cliente</Tx></span>
             <input
               key={project.siteName ?? ''}
               list="site-names"
               defaultValue={project.siteName ?? ''}
-              placeholder="es. Casa Rossi (raggruppa più lavori)"
+              placeholder={tx('es. Casa Rossi (raggruppa più lavori)')}
               maxLength={80}
               onBlur={(event) => {
                 const value = event.target.value.trim()
@@ -221,19 +225,19 @@ export function ProjectPage() {
         <RiskNotice trade={project.trade} />
         <div className="proj-actions no-print">
           <Link className="btn sm" to={`/mestiere/${project.trade}?fascicolo=${project.id}`}>
-            ✏️ Modifica misure
+            <Tx>✏️ Modifica misure</Tx>
           </Link>
           <button type="button" className="btn sm" onClick={() => void copyQuote()}>
-            📋 Copia preventivo
+            <Tx>📋 Copia preventivo</Tx>
           </button>
           <Link className="btn sm solid" to={`/progetto/${project.id}/preventivo`}>
-            🧾 Preventivo cliente
+            <Tx>🧾 Preventivo cliente</Tx>
           </Link>
           <Link className="btn sm" to={`/progetto/${project.id}/report`}>
-            📄 Report / PDF
+            <Tx>📄 Report / PDF</Tx>
           </Link>
           <button type="button" className="btn sm ghost danger" onClick={() => void remove()}>
-            🗑 Elimina
+            <Tx>🗑 Elimina</Tx>
           </button>
         </div>
       </header>
@@ -241,7 +245,7 @@ export function ProjectPage() {
       <nav className="tabs no-print" aria-label="Sezioni del fascicolo">
         {TABS.map((item) => (
           <button key={item.id} type="button" className={tab === item.id ? 'on' : ''} onClick={() => goTab(item.id)}>
-            <span>{item.ico}</span> {item.label}
+            <span>{item.ico}</span> <Tx>{item.label}</Tx>
           </button>
         ))}
       </nav>
@@ -253,27 +257,27 @@ export function ProjectPage() {
           {nextPhase ? (
             <div className="next-card no-print">
               <div>
-                <p className="kicker">Prossimo passo</p>
-                <h3>{nextPhase.title}</h3>
-                <p className="help">Ti spiego come farlo e controllo il risultato dalla foto.</p>
+                <p className="kicker"><Tx>Prossimo passo</Tx></p>
+                <h3><Tx>{nextPhase.title}</Tx></h3>
+                <p className="help"><Tx>Ti spiego come farlo e controllo il risultato dalla foto.</Tx></p>
               </div>
               <div className="actions">
                 <button type="button" className="btn solid" onClick={() => goTab('passi')}>
-                  Vai al passo →
+                  <Tx>Vai al passo →</Tx>
                 </button>
                 <button type="button" className="btn" onClick={() => goTab('assistente')}>
-                  💬 Chiedi aiuto
+                  <Tx>💬 Chiedi aiuto</Tx>
                 </button>
               </div>
             </div>
           ) : (
-            <p className="banner">🎉 Tutte le fasi sono completate. Controlla la checklist finale e genera il report.</p>
+            <p className="banner"><Tx>🎉 Tutte le fasi sono completate. Controlla la checklist finale e genera il report.</Tx></p>
           )}
 
           <section className="card">
-            <h2>📷 Foto del lavoro</h2>
+            <h2><Tx>📷 Foto del lavoro</Tx></h2>
             {sitePhotos.length === 0 ? (
-              <p className="banner warn">Manca una foto di inquadramento: aggiungila per una diagnosi più precisa.</p>
+              <p className="banner warn"><Tx>Manca una foto di inquadramento: aggiungila per una diagnosi più precisa.</Tx></p>
             ) : (
               <div className="photo-row">
                 {sitePhotos.map((item) => (
@@ -295,29 +299,29 @@ export function ProjectPage() {
           </section>
 
           <section className="card">
-            <h2>🩺 Diagnosi</h2>
+            <h2><Tx>🩺 Diagnosi</Tx></h2>
             <p className="quote-line">«{project.description}»</p>
             {reading ? (
               <div className="ai-note">
                 <span className="source">
-                  {reading.photosSent ? 'Letto dall’AI sulle foto e sui dati' : 'Letto dall’AI sui dati (nessuna foto)'}
+                  <Tx>{reading.photosSent ? 'Letto dall’AI sulle foto e sui dati' : 'Letto dall’AI sui dati (nessuna foto)'}</Tx>
                 </span>
                 <p>
                   <strong>{reading.problem}</strong>
                 </p>
-                <h3>Punti critici</h3>
+                <h3><Tx>Punti critici</Tx></h3>
                 <ul className="plain-list">
                   {reading.criticalPoints.map((point) => (
-                    <li key={point}>{point}</li>
+                    <li key={point}><Tx>{point}</Tx></li>
                   ))}
                 </ul>
-                <h3>Sicurezza</h3>
+                <h3><Tx>Sicurezza</Tx></h3>
                 <ul className="plain-list">
                   {reading.safety.map((item) => (
-                    <li key={item}>{item}</li>
+                    <li key={item}><Tx>{item}</Tx></li>
                   ))}
                 </ul>
-                <h3>Come procedere</h3>
+                <h3><Tx>Come procedere</Tx></h3>
                 <p className="detail">{reading.procedureNotes}</p>
               </div>
             ) : (
@@ -327,41 +331,41 @@ export function ProjectPage() {
               </p>
             )}
             {reading && project.diagnosisError ? (
-              <p className="banner warn">Ultimo tentativo non riuscito: {project.diagnosisError}</p>
+              <p className="banner warn"><Tx>Ultimo tentativo non riuscito:</Tx> {project.diagnosisError}</p>
             ) : null}
-            <p>{project.currentState}</p>
+            <p><Tx>{project.currentState}</Tx></p>
             <button type="button" className="btn no-print" disabled={aiBusy} onClick={() => void enrich(project)}>
-              {aiBusy ? '🔍 Ci penso…' : reading ? '🔄 Rifai la diagnosi' : '✨ Chiedi la diagnosi all’AI'}
+              <Tx>{aiBusy ? '🔍 Ci penso…' : reading ? '🔄 Rifai la diagnosi' : '✨ Chiedi la diagnosi all’AI'}</Tx>
             </button>
           </section>
 
           <div className="split-notes">
             <section className="card">
-              <h2>👀 Punti da controllare</h2>
+              <h2><Tx>👀 Punti da controllare</Tx></h2>
               <ul className="plain-list">
                 {project.criticalPoints.map((point) => (
-                  <li key={point}>{point}</li>
+                  <li key={point}><Tx>{point}</Tx></li>
                 ))}
               </ul>
-              <h3>Attrezzi</h3>
+              <h3><Tx>Attrezzi</Tx></h3>
               <ul className="tools">
                 {project.tools.map((tool) => (
-                  <li key={tool}>{tool}</li>
+                  <li key={tool}><Tx>{tool}</Tx></li>
                 ))}
               </ul>
             </section>
             <section className="card safety">
-              <h2>🦺 Sicurezza</h2>
+              <h2><Tx>🦺 Sicurezza</Tx></h2>
               <ul className="plain-list">
                 {project.safety.map((item) => (
-                  <li key={item}>{item}</li>
+                  <li key={item}><Tx>{item}</Tx></li>
                 ))}
               </ul>
             </section>
           </div>
 
           <section className="card">
-            <h2>📚 Note tecniche</h2>
+            <h2><Tx>📚 Note tecniche</Tx></h2>
             <Notes notes={project.notes} />
           </section>
         </>
@@ -371,12 +375,12 @@ export function ProjectPage() {
         <>
           {project.slope ? <SlopeCard slope={project.slope} /> : null}
           <section className="card">
-            <h2>🧮 Come ho calcolato le quantità</h2>
+            <h2><Tx>🧮 Come ho calcolato le quantità</Tx></h2>
             <CalcList steps={project.calcSteps} />
           </section>
           <section className="card">
-            <h2>🧱 Materiali da comprare</h2>
-            <p className="help">Cambia quantità o prezzo con i prezzi del tuo negozio: il totale si aggiorna da solo.</p>
+            <h2><Tx>🧱 Materiali da comprare</Tx></h2>
+            <p className="help"><Tx>Cambia quantità o prezzo con i prezzi del tuo negozio: il totale si aggiorna da solo.</Tx></p>
             <MaterialsTable
               lines={project.materials}
               editable
@@ -391,7 +395,7 @@ export function ProjectPage() {
             />
           </section>
           <section className="card">
-            <h2>💶 Preventivo</h2>
+            <h2><Tx>💶 Preventivo</Tx></h2>
             <QuoteBox
               quote={project.quote}
               areaM2={project.areaM2}
@@ -408,10 +412,10 @@ export function ProjectPage() {
             />
             <div className="actions no-print" style={{ marginTop: '0.8rem' }}>
               <button type="button" className="btn" onClick={() => void copyQuote()}>
-                📋 Copia il preventivo
+                <Tx>📋 Copia il preventivo</Tx>
               </button>
               <Link className="btn" to={`/progetto/${project.id}/report`}>
-                📄 Apri il report
+                <Tx>📄 Apri il report</Tx>
               </Link>
             </div>
           </section>
@@ -421,10 +425,10 @@ export function ProjectPage() {
       {tab === 'passi' ? (
         <>
           <section className="card">
-            <h2>🪜 Segui i passi</h2>
+            <h2><Tx>🪜 Segui i passi</Tx></h2>
             <p className="help">
-              Per ogni passo: leggi cosa fare, chiedi la spiegazione dettagliata, cerca un tutorial video, poi manda una
-              foto per farti controllare il risultato.
+              <Tx>Per ogni passo: leggi cosa fare, chiedi la spiegazione dettagliata, cerca un tutorial video, poi manda una
+              foto per farti controllare il risultato.</Tx>
             </p>
             <ol className="phases">
               {project.phases.map((item, index) => {
@@ -434,8 +438,8 @@ export function ProjectPage() {
                   <li key={item.id} className={item.done ? 'phase done' : current ? 'phase current' : 'phase'}>
                     <span className="phase-index">{item.done ? '✓' : index + 1}</span>
                     <div>
-                      <h3>{item.title}</h3>
-                      <p className="detail">{item.detail}</p>
+                      <h3><Tx>{item.title}</Tx></h3>
+                      <p className="detail"><Tx>{item.detail}</Tx></p>
                       <div className="no-print">
                         <VideoShelf query={item.videoQuery} />
                       </div>
@@ -460,12 +464,12 @@ export function ProjectPage() {
                           ))}
                         </div>
                       ) : null}
-                      {item.visualNote ? <p className="help">Nota: {item.visualNote}</p> : null}
-                      {item.photoConsistent === true ? <p>✅ L’AI ritiene la foto coerente con questo passo.</p> : null}
-                      {item.photoConsistent === false ? <p>⚠️ L’AI non ritiene la foto coerente con questo passo.</p> : null}
+                      {item.visualNote ? <p className="help"><Tx>Nota:</Tx> {item.visualNote}</p> : null}
+                      {item.photoConsistent === true ? <p><Tx>✅ L’AI ritiene la foto coerente con questo passo.</Tx></p> : null}
+                      {item.photoConsistent === false ? <p><Tx>⚠️ L’AI non ritiene la foto coerente con questo passo.</Tx></p> : null}
                       {item.aiText ? (
                         <div className="ai-note">
-                          <span className="source">Verifica dell’AI</span>
+                          <span className="source"><Tx>Verifica dell’AI</Tx></span>
                           <p>{item.aiText}</p>
                         </div>
                       ) : null}
@@ -481,7 +485,7 @@ export function ProjectPage() {
                               void persist({ ...project, phases })
                             }}
                           />
-                          Fatto
+                          <Tx>Fatto</Tx>
                         </label>
                         <GuideButton
                           project={project}
@@ -494,7 +498,7 @@ export function ProjectPage() {
                           }
                         />
                         <label className="btn">
-                          📷 Foto
+                          <Tx>📷 Foto</Tx>
                           <input
                             type="file"
                             accept="image/*"
@@ -507,7 +511,7 @@ export function ProjectPage() {
                           />
                         </label>
                         <button type="button" className="btn" onClick={() => setOpenPhase(item.id)}>
-                          🔎 Controlla con l’AI
+                          <Tx>🔎 Controlla con l’AI</Tx>
                         </button>
                       </div>
                     </div>
@@ -518,7 +522,7 @@ export function ProjectPage() {
           </section>
 
           <section className="card">
-            <h2>✅ Checklist finale</h2>
+            <h2><Tx>✅ Checklist finale</Tx></h2>
             <ul className="checks">
               {project.checklist.map((item) => (
                 <li key={item.id}>
@@ -533,7 +537,7 @@ export function ProjectPage() {
                         void persist({ ...project, checklist })
                       }}
                     />
-                    {item.text}
+                    <Tx>{item.text}</Tx>
                   </label>
                 </li>
               ))}
@@ -546,7 +550,7 @@ export function ProjectPage() {
 
       {tab !== 'assistente' ? (
         <button type="button" className="btn solid big fab no-print" onClick={() => goTab('assistente')}>
-          💬 Chiedi all’assistente
+          <Tx>💬 Chiedi all’assistente</Tx>
         </button>
       ) : null}
 

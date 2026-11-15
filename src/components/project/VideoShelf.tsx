@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import type { VideoHit } from '../../domain/types'
 import { findVideos } from '../../lib/videos'
+import { Tx, tx } from '../../lib/translate'
 
 /** Elenco di video con riproduzione dentro l'app (youtube-nocookie) e link per aprirli su YouTube. */
 export function VideoList({ videos: all, query }: { videos: VideoHit[]; query: string }) {
@@ -9,9 +10,9 @@ export function VideoList({ videos: all, query }: { videos: VideoHit[]; query: s
   if (videos.length === 0) {
     return (
       <p className="help">
-        Nessun video trovato per «{query}».{' '}
+        <Tx>Nessun video trovato per «</Tx>{query}».{' '}
         <a href={`https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`} target="_blank" rel="noreferrer">
-          Cerca su YouTube
+          <Tx>Cerca su YouTube</Tx>
         </a>
       </p>
     )
@@ -41,21 +42,22 @@ export function VideoList({ videos: all, query }: { videos: VideoHit[]; query: s
               <strong>{video.title}</strong>
               <small>{video.channel}</small>
               <a href={`https://www.youtube.com/watch?v=${video.id}`} target="_blank" rel="noreferrer">
-                Apri su YouTube ↗
+                <Tx>Apri su YouTube ↗</Tx>
               </a>
             </div>
           </li>
         ))}
       </ul>
       <p className="help">
-        Video trovati su YouTube per «{query}»: sono di terzi, verifica che il metodo valga per il tuo caso.
+        <Tx>Video trovati su YouTube per «</Tx>{query}<Tx>»: sono di terzi, verifica che il metodo valga per il tuo caso.</Tx>
       </p>
     </div>
   )
 }
 
 /** Pulsante che cerca i video per una query e li mostra sotto. */
-export function VideoShelf({ query, label = '📺 Guarda i video tutorial' }: { query: string; label?: string }) {
+export function VideoShelf({ query: sourceQuery, label = '📺 Guarda i video tutorial' }: { query: string; label?: string }) {
+  const query = tx(sourceQuery) // la ricerca sui video segue la lingua scelta
   const [videos, setVideos] = useState<VideoHit[] | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -77,13 +79,13 @@ export function VideoShelf({ query, label = '📺 Guarda i video tutorial' }: { 
           }
         }}
       >
-        {busy ? '📺 Cerco i video…' : videos ? '📺 Aggiorna i video' : label}
+        <Tx>{busy ? '📺 Cerco i video…' : videos ? '📺 Aggiorna i video' : label}</Tx>
       </button>
       {error ? (
         <p className="banner err">
           {error}{' '}
           <a href={`https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`} target="_blank" rel="noreferrer">
-            Cerca direttamente su YouTube ↗
+            <Tx>Cerca direttamente su YouTube ↗</Tx>
           </a>
         </p>
       ) : null}
