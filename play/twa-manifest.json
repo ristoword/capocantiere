@@ -8,7 +8,7 @@
     "themeColor":  "#5b4bff",
     "navigationColor":  "#ffffff",
     "backgroundColor":  "#f3f4ff",
-    "enableNotifications":  false,
+    "enableNotifications":  true,
     "startUrl":  "/",
     "iconUrl":  "https://capocantiere-production.up.railway.app/icon-512.png",
     "maskableIconUrl":  "https://capocantiere-production.up.railway.app/icon-maskable-512.png",
