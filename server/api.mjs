@@ -8,6 +8,7 @@ import { createAiMiddleware } from './aiProxy.mjs'
 import { listBackups, makeBackup } from './backup.mjs'
 import { createTranslator } from './translate.mjs'
 import { billingConfigured, createCheckout, createPortal, interpretEvent, verifyWebhook } from './billing.mjs'
+import { playConfigured, verifyPurchase } from './play.mjs'
 
 const COOKIE = 'cc_session'
 const SESSION_DAYS = 30
@@ -114,6 +115,8 @@ export function createApi(env, options = {}) {
     setSub: db.prepare('UPDATE users SET sub_until = ?, sub_source = ? WHERE id = ?'),
     setCustomer: db.prepare('UPDATE users SET stripe_customer = ? WHERE id = ?'),
     userByCustomer: db.prepare("SELECT * FROM users WHERE stripe_customer = ? AND stripe_customer != ''"),
+    setPlayToken: db.prepare('UPDATE users SET play_token = ? WHERE id = ?'),
+    userByPlayToken: db.prepare("SELECT id FROM users WHERE play_token = ? AND play_token != ''"),
     setPassword: db.prepare('UPDATE users SET pass_hash = ? WHERE id = ?'),
     deleteUser: db.prepare('DELETE FROM users WHERE id = ?'),
     insertSession: db.prepare('INSERT INTO sessions (token_hash, user_id, created_at, expires_at) VALUES (?, ?, ?, ?)'),
@@ -172,7 +175,11 @@ export function createApi(env, options = {}) {
     name: user.name,
     isAdmin: user.is_admin === 1,
     plan: planOf(user),
-    billing: { enabled: billingConfigured(env), manageable: Boolean(user.stripe_customer) && billingConfigured(env) },
+    billing: {
+      enabled: billingConfigured(env),
+      manageable: Boolean(user.stripe_customer) && billingConfigured(env),
+      play: playConfigured(env),
+    },
   })
 
   function makeResetToken(userId) {
@@ -491,6 +498,20 @@ export function createApi(env, options = {}) {
 
   async function billing(req, res, user, route) {
     if (req.method !== 'POST') return fail(res, 404, 'Percorso non trovato')
+    if (route === 'play') {
+      // Acquisto fatto con Google Play dentro l'app Android: il token si controlla presso Google, mai ci si fida del client.
+      if (!playConfigured(env)) return fail(res, 409, 'Google Play non è ancora collegato a questo sito.')
+      const body = await readJson(req, 20000)
+      const token = String(body.purchaseToken || '')
+      if (token.length < 20 || token.length > 2000) return fail(res, 400, 'Acquisto non valido.')
+      const owner = q.userByPlayToken.get(token)
+      if (owner && owner.id !== user.id) return fail(res, 409, 'Questo abbonamento è già collegato a un altro account.')
+      const result = await verifyPurchase(env, token, options.playFetch ?? fetch)
+      if (!result.valid) return fail(res, result.reason === 'google' ? 502 : 402, 'Abbonamento Google Play non attivo.')
+      q.setSub.run(result.until, 'play', user.id)
+      q.setPlayToken.run(token, user.id)
+      return send(res, 200, { ok: true, plan: planOf(q.userById.get(user.id)) })
+    }
     if (!billingConfigured(env)) return fail(res, 409, 'I pagamenti non sono ancora attivi su questo sito.')
     if (route === 'checkout') {
       if (planOf(user).status === 'unlimited') return fail(res, 409, 'Il tuo account non richiede un abbonamento.')

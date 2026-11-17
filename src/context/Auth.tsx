@@ -1,5 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import { api, ApiError, PAYWALL_EVENT, UNAUTH_EVENT } from '../lib/http'
+import { inPlayApp } from '../lib/plan'
+import { syncPlayPurchases } from '../lib/playBilling'
 
 const USER_CACHE = 'capocantiere-last-user'
 
@@ -12,7 +14,7 @@ export interface User {
   isAdmin: boolean
   /** Prova gratuita / abbonamento. `until` è in millisecondi. */
   plan: { status: PlanStatus; until?: number }
-  billing: { enabled: boolean; manageable: boolean }
+  billing: { enabled: boolean; manageable: boolean; play?: boolean }
 }
 
 /** Stato di accesso di un utente salvato prima dell'introduzione degli abbonamenti (cache vecchia): nessun blocco lato app. */
@@ -63,6 +65,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setLoading(false)
     }
   }, [])
+
+  const playSync = user?.billing.play === true && user.plan.status !== 'unlimited'
+  useEffect(() => {
+    // Nell'app Android si riallinea l'abbonamento Google Play (rinnovi, nuovo telefono) e si rilegge lo stato.
+    if (playSync && inPlayApp()) void syncPlayPurchases().then((changed) => (changed ? refresh() : undefined))
+  }, [playSync, refresh])
 
   useEffect(() => {
     void refresh()

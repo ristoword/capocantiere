@@ -5,11 +5,12 @@ import { euro } from '../lib/format'
 import { useT } from '../lib/i18n'
 import { api } from '../lib/http'
 import { daysLeft, inPlayApp, SUBSCRIPTION_PRICE } from '../lib/plan'
+import { buyOnPlay } from '../lib/playBilling'
 import { Tx } from '../lib/translate'
 
 /** Pagamento (se attivo sul server) e stato dell'abbonamento. Con la prova finita i dati restano leggibili ed esportabili. */
 export function PaywallPage() {
-  const { user } = useAuth()
+  const { user, refresh } = useAuth()
   const t = useT()
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -26,6 +27,22 @@ export function PaywallPage() {
       window.location.assign(url) // pagina di pagamento ospitata da Stripe: i dati della carta non passano da qui
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : t('plan.checkoutFail'))
+      setBusy(false)
+    }
+  }
+
+  async function subscribeOnPlay() {
+    setBusy(true)
+    setError(null)
+    try {
+      await buyOnPlay()
+      await refresh()
+    } catch (reason) {
+      // Chiudere la finestra di Google Play non è un errore.
+      if (!(reason instanceof DOMException && reason.name === 'AbortError')) {
+        setError(reason instanceof Error ? reason.message : t('plan.checkoutFail'))
+      }
+    } finally {
       setBusy(false)
     }
   }
@@ -78,7 +95,19 @@ export function PaywallPage() {
             {error}
           </p>
         ) : null}
-        {plan.status === 'unlimited' ? null : inPlayApp() ? (
+        {plan.status === 'unlimited' ? null : inPlayApp() && user?.billing.play ? (
+          <div className="inline-actions">
+            {plan.status !== 'active' ? (
+              <button type="button" className="btn solid" disabled={busy} onClick={() => void subscribeOnPlay()}>
+                <Tx>Abbonati con Google Play</Tx>
+              </button>
+            ) : (
+              <a className="btn" href="https://play.google.com/store/account/subscriptions" target="_blank" rel="noreferrer">
+                <Tx>Gestisci su Google Play</Tx>
+              </a>
+            )}
+          </div>
+        ) : inPlayApp() ? (
           <p className="banner">
             <Tx>Per abbonarti vai su capocantiere-production.up.railway.app dal browser, accedi con lo stesso account e attiva l'abbonamento: qui nell'app si sbloccherà da solo.</Tx>
           </p>

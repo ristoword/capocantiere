@@ -85,6 +85,10 @@ const MIGRATIONS = [
     PRIMARY KEY (lang, hash)
   );
   `,
+  // Abbonamento Google Play: il token d'acquisto resta legato a un solo account.
+  `
+  ALTER TABLE users ADD COLUMN play_token TEXT NOT NULL DEFAULT '';
+  `,
 ]
 
 export function openDatabase(file) {

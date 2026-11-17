@@ -1,22 +1,31 @@
 {
-  "packageId": "app.capocantiere.twa",
-  "host": "capocantiere-production.up.railway.app",
-  "name": "Capocantiere — assistente di cantiere",
-  "launcherName": "Capocantiere",
-  "display": "standalone",
-  "orientation": "default",
-  "themeColor": "#5b4bff",
-  "navigationColor": "#ffffff",
-  "backgroundColor": "#f3f4ff",
-  "enableNotifications": false,
-  "startUrl": "/",
-  "iconUrl": "https://capocantiere-production.up.railway.app/icon-512.png",
-  "maskableIconUrl": "https://capocantiere-production.up.railway.app/icon-maskable-512.png",
-  "appVersion": "1.0.0",
-  "appVersionCode": 1,
-  "signingKey": { "path": "./android.keystore", "alias": "capocantiere" },
-  "fallbackType": "customtabs",
-  "features": {},
-  "isChromeOSOnly": false,
-  "isMetaQuest": false
+    "packageId":  "app.capocantiere.twa",
+    "host":  "capocantiere-production.up.railway.app",
+    "name":  "Capocantiere — assistente di cantiere",
+    "launcherName":  "Capocantiere",
+    "display":  "standalone",
+    "orientation":  "default",
+    "themeColor":  "#5b4bff",
+    "navigationColor":  "#ffffff",
+    "backgroundColor":  "#f3f4ff",
+    "enableNotifications":  false,
+    "startUrl":  "/",
+    "iconUrl":  "https://capocantiere-production.up.railway.app/icon-512.png",
+    "maskableIconUrl":  "https://capocantiere-production.up.railway.app/icon-maskable-512.png",
+    "appVersion":  "1.1.0",
+    "appVersionCode":  2,
+    "signingKey":  {
+                       "path":  "./android.keystore",
+                       "alias":  "capocantiere"
+                   },
+    "fallbackType":  "customtabs",
+    "features":  {
+                     "playBilling":  {
+                                         "enabled":  true
+                                     }
+                 },
+    "isChromeOSOnly":  false,
+    "isMetaQuest":  false,
+    "splashScreenFadeOutDuration":  300,
+    "minSdkVersion":  24
 }
