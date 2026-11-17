@@ -4,7 +4,8 @@ import { useAuth, planOf } from '../context/Auth'
 import { euro } from '../lib/format'
 import { useT } from '../lib/i18n'
 import { api } from '../lib/http'
-import { daysLeft, SUBSCRIPTION_PRICE } from '../lib/plan'
+import { daysLeft, inPlayApp, SUBSCRIPTION_PRICE } from '../lib/plan'
+import { Tx } from '../lib/translate'
 
 /** Pagamento (se attivo sul server) e stato dell'abbonamento. Con la prova finita i dati restano leggibili ed esportabili. */
 export function PaywallPage() {
@@ -77,7 +78,11 @@ export function PaywallPage() {
             {error}
           </p>
         ) : null}
-        {plan.status === 'unlimited' ? null : user?.billing.enabled ? (
+        {plan.status === 'unlimited' ? null : inPlayApp() ? (
+          <p className="banner">
+            <Tx>Per abbonarti vai su capocantiere-production.up.railway.app dal browser, accedi con lo stesso account e attiva l'abbonamento: qui nell'app si sbloccherà da solo.</Tx>
+          </p>
+        ) : user?.billing.enabled ? (
           <div className="inline-actions">
             {plan.status !== 'active' ? (
               <button type="button" className="btn solid" disabled={busy} onClick={() => void go('/api/billing/checkout')}>
