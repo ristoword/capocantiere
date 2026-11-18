@@ -9,14 +9,28 @@ export const playProduct = (env) => env.PLAY_PRODUCT_ID || 'capocantiere_mensile
 
 /** Chiave dell'account di servizio: JSON in chiaro oppure in base64 (comodo nelle variabili di Railway). */
 export function serviceAccount(env) {
-  const raw = String(env.PLAY_SERVICE_ACCOUNT_JSON || '').trim()
+  let raw = String(env.PLAY_SERVICE_ACCOUNT_JSON || '').trim()
   if (!raw) return null
-  try {
-    const json = JSON.parse(raw.startsWith('{') ? raw : Buffer.from(raw, 'base64').toString('utf8'))
-    return json.client_email && json.private_key ? json : null
-  } catch {
-    return null
+  if (/^'[\s\S]*'$/.test(raw)) raw = raw.slice(1, -1).trim() // apici attorno all'intero JSON
+  if (!raw.startsWith('{')) {
+    try {
+      raw = Buffer.from(raw, 'base64').toString('utf8').trim()
+    } catch {
+      return null
+    }
   }
+  let json = null
+  try {
+    json = JSON.parse(raw)
+  } catch {
+    // Alcuni pannelli trasformano i \n della chiave in a-capo veri o raddoppiano le barre: si estraggono i due campi a mano.
+    const mail = /"client_email"\s*:\s*"([^"]+)"/.exec(raw)?.[1]
+    const key = /"private_key"\s*:\s*"(-----BEGIN[\s\S]*?-----END [A-Z ]+-----)/.exec(raw)?.[1]
+    if (mail && key) json = { client_email: mail, private_key: key }
+  }
+  if (!json?.client_email || typeof json.private_key !== 'string') return null
+  const privateKey = json.private_key.replace(/\\r/g, '').replace(/\\n/g, '\n').replace(/\r/g, '')
+  return { ...json, private_key: privateKey }
 }
 
 export const playConfigured = (env) => Boolean(serviceAccount(env) && env.ANDROID_PACKAGE)

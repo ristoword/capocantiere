@@ -6,7 +6,7 @@ import { createApi } from './api.mjs'
 // @ts-expect-error modulo JS senza tipi
 import { openDatabase } from './db.mjs'
 // @ts-expect-error modulo JS senza tipi
-import { interpretSubscription } from './play.mjs'
+import { interpretSubscription, serviceAccount } from './play.mjs'
 
 const { privateKey } = crypto.generateKeyPairSync('rsa', { modulusLength: 2048 })
 const account = JSON.stringify({ client_email: 'svc@test.iam', private_key: privateKey.export({ type: 'pkcs8', format: 'pem' }) })
@@ -45,6 +45,19 @@ afterAll(() => server.close())
 
 describe('abbonamento Google Play', () => {
   const token = 'purchase-token-'.padEnd(40, 'x')
+
+  it('legge la chiave in tutti i formati: JSON, base64, a-capo veri, barre raddoppiate', () => {
+    const pem = privateKey.export({ type: 'pkcs8', format: 'pem' }) as string
+    const plain = JSON.stringify({ client_email: 'svc@test.iam', private_key: pem })
+    const realNewlines = plain.replace(/\\n/g, '\n') // il pannello ha trasformato \n in a-capo veri
+    const doubled = plain.replace(/\\n/g, '\\\\n')
+    for (const value of [plain, Buffer.from(plain).toString('base64'), realNewlines, doubled, `'${plain}'`]) {
+      const parsed = serviceAccount({ PLAY_SERVICE_ACCOUNT_JSON: value })
+      expect(parsed?.client_email).toBe('svc@test.iam')
+      expect(parsed?.private_key.trim()).toBe(pem.trim())
+    }
+    expect(serviceAccount({ PLAY_SERVICE_ACCOUNT_JSON: 'spazzatura' })).toBeNull()
+  })
 
   it('interpreta lo stato della sottoscrizione', () => {
     expect(interpretSubscription(subscription, 'capocantiere_mensile').valid).toBe(true)
